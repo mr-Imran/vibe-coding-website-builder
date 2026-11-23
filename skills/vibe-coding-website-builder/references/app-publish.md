@@ -110,9 +110,10 @@ Adapt the wording to the owner; one action per step.
      run on UTC; without this, every rule about a time of day is hours out.
    - any keys for outside services the app uses (named in `.env.example`)
 4. Add the permanent place for the database: in the project view,
-   right-click the empty area next to the service (or use the **Create**
-   button), choose **Volume**, attach it to the service, and give `/data` as
-   the mount path.
+   right-click the empty area next to the service and choose **Volume**
+   (or press Ctrl+K, Cmd+K on a Mac, and type "volume"). Pick the service
+   when it asks which one to connect it to, and give `/data` as the mount
+   path.
 5. **Settings**, **Networking**, **Generate Domain**. This is the app's
    address, ending in `.up.railway.app`.
 6. Wait for the deployment to show as active, open the address, sign in with

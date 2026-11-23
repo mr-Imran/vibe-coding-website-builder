@@ -46,6 +46,7 @@ app the skill builds, so a mistake in it is a mistake in all of them.
 cd skills/vibe-coding-website-builder/assets/app-starter
 node --test                 # every test must pass
 node tools/rubric.js        # the tests, counted against M01 to A08
+node tools/look.js          # after touching a page, a page script or app.css: every screen in a browser
 ```
 
 - It needs Node.js 22.13 or newer and has no dependencies. Keep it that way:
@@ -63,6 +64,13 @@ node tools/rubric.js        # the tests, counted against M01 to A08
 - Nothing in the starter may name a role. The app's builder renames the roles
   in `config.js`; pages use `'top'` for the first one, and the core's tests
   bring their own.
+- The app's name is written in the pages and in `config.js`, never in a
+  script. Page scripts replace content with `fill()` from `api.js`, not
+  `replaceChildren()`, which prints the word "null". Tests check both.
+- Pages for signed-in people must not come back on the Back button after
+  signing out. Two things keep that true (pages served `no-store`, and the
+  reload in `api.js` when a page is restored from the browser's memory);
+  `tools/look.js` checks the result in a real browser. Do not remove either.
 - The `.cmd` files are for people who do not use a terminal. They keep
   Windows line endings (`.gitattributes` stops git from changing them), and
   a test checks that.

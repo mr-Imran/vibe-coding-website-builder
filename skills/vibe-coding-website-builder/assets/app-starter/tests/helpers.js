@@ -33,7 +33,7 @@ export async function startApp({ setup = null, config = {}, dir = null, log = qu
     },
     async stop({ keep = false } = {}) {
       await built.close(server);
-      if (!keep && !dir) fs.rmSync(dataDir, { recursive: true, force: true });
+      if (!keep && !dir) removeFolder(dataDir);
     },
   };
 }
@@ -107,6 +107,24 @@ export function createClient(base) {
     },
   };
   return client;
+}
+
+// Delete a throw-away folder. On Windows a file that another program still
+// has open cannot be deleted, and the error for that (EPERM) would replace
+// the failure the test was about to report. So: try a few times, and if the
+// folder still cannot go, leave it to the system's own clean-up of the temp
+// folder and let the test's real result stand.
+export function removeFolder(dir) {
+  try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch { /* still held by another program */ }
+}
+
+// Run several programs at once and wait for every one of them, also when one
+// fails. Promise.all gives up at the first failure while the others are still
+// running with the database open: the clean-up then fails as well and hides
+// what went wrong. Returns one entry per program, { stdout, stderr } or the
+// error; check them after.
+export async function runAll(jobs) {
+  return Promise.all(jobs.map((job) => job.catch((err) => err)));
 }
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

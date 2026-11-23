@@ -14,6 +14,7 @@ export class ApiError extends Error {
     this.code = e.code || 'error';
     this.fields = e.fields || null;       // { fieldName: 'what is wrong' } for form errors
     this.current = e.current || null;     // the record as it is now, when someone else changed it
+    this.rule = e.rule || null;           // which rule refused, when the route named one: conflict('...', { rule: 'max_open' })
     this.offline = status === 0;
   }
 }
@@ -45,8 +46,26 @@ export function allows(roles, role) {
   return roles.includes(role);
 }
 
+// The Back button after signing out. A browser keeps the page it just left
+// exactly as it was (names, records and all) and shows it again on Back
+// without running any script or asking the server. On a shared computer that
+// hands the last person's screen to the next one. So a page for signed-in
+// people that comes back this way is hidden at once and loaded afresh, which
+// sends a signed-out visitor to the sign-in page.
+let guarded = false;
+function reloadWhenRestored() {
+  if (guarded) return;
+  guarded = true;
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    document.documentElement.hidden = true;
+    location.reload();
+  });
+}
+
 // For pages that need a signed-in user: sends everyone else to the sign-in page.
 export async function requireSession(roles = null) {
+  reloadWhenRestored();
   const user = await loadSession();
   if (!user) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return new Promise(() => {}); }
   if (!allows(roles, user.role)) { location.href = '/'; return new Promise(() => {}); }
@@ -108,6 +127,9 @@ export async function withBusy(button, work) {
 // Put text on the page safely. Never build HTML by joining strings that
 // contain what a person typed; that is how one user's text runs as code in
 // another user's browser.
+// Children that are null, undefined or false are left out, so a part can be
+// conditional: el('p', {}, name, isYou ? ' (you)' : null). To replace what is
+// inside an existing node the same way, use fill() below.
 export function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {
@@ -129,6 +151,18 @@ export function el(tag, props = {}, ...children) {
     if (child === null || child === undefined || child === false) continue;
     node.append(child instanceof Node ? child : document.createTextNode(String(child)));
   }
+  return node;
+}
+
+// Replace what is inside a node. Like node.replaceChildren(...), except that
+// it leaves out null, undefined and false the way el() does, and takes lists.
+// The browser's own replaceChildren() prints the word "null" on the page for
+//   pager.replaceChildren(text, more ? button : null)
+// so use fill(pager, text, more ? button : null).
+export function fill(node, ...children) {
+  node.replaceChildren(...children.flat(Infinity)
+    .filter((child) => child !== null && child !== undefined && child !== false)
+    .map((child) => (child instanceof Node ? child : document.createTextNode(String(child)))));
   return node;
 }
 

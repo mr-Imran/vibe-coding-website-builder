@@ -9,7 +9,7 @@
 // 'top' means the first role in config.js, so renaming the roles there does
 // not lock anyone out of the People screen.
 
-import { allows, api, el, requireSession } from './api.js';
+import { allows, api, el, fill, requireSession } from './api.js';
 
 const MENU = [
   { href: '/', label: 'Home' },
@@ -24,7 +24,7 @@ export async function startPage(roles = null) {
   const nav = document.getElementById('nav');
   if (nav) {
     const here = location.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/';
-    nav.replaceChildren(...MENU.filter((m) => allows(m.roles, user.role)).map((m) =>
+    fill(nav, MENU.filter((m) => allows(m.roles, user.role)).map((m) =>
       el('a', { href: m.href, 'aria-current': m.href === here ? 'page' : null }, m.label)));
   }
   const who = document.getElementById('who-name');

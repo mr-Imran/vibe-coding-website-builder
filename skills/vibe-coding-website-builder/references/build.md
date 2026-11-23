@@ -245,6 +245,8 @@ page. So also look:
   "Google Chrome" inside its application folder on macOS). Save the pictures
   outside the site folder and look at them. For pages behind a sign-in, start
   the browser with `--remote-debugging-port` and drive it from a short script.
+  (An app built from the starter has that script already: `node tools/look.js`,
+  see section 8 of `references/app.md`.)
 - If there is no browser at all, read your own CSS once more as a narrow
   screen would apply it, and tell the owner to make the browser window narrow
   to see the phone layout.

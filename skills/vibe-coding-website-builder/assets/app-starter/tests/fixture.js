@@ -3,7 +3,7 @@
 // tests next to this file; you can delete nothing here.
 
 import { tx, now } from '../core/db.js';
-import { conflict } from '../core/errors.js';
+import { conflict, forbidden } from '../core/errors.js';
 import { once } from '../core/idempotency.js';
 import { guardRecord } from '../core/policy.js';
 import { listQuery, takeOne, updateVersioned } from '../core/records.js';
@@ -50,10 +50,17 @@ export function setupFixture({ app, db, auth, hub }) {
     const list = listQuery(db, {
       table: 't_things', where, query: ctx.query,
       search: { q: ctx.query.q, columns: ['title', 'notes'] },
-      filters: { status: 'eq', min_price: { column: 'price', op: '>=' } },
+      filters: {
+        // Checked like a form field: ?status=maybe is a 422, not an empty list.
+        status: { check: { type: 'enum', values: ['open', 'done'], label: 'Status' } },
+        min_price: { column: 'price', op: '>=', check: { type: 'number', min: 0, label: 'Lowest price' } },
+        // A filter whose condition is worked out, not a plain comparison.
+        mine: { check: { type: 'bool' }, where: (on) => (on ? { sql: 'owner_id = ?', params: [ctx.user.id] } : null) },
+        notes: 'eq',                                    // the short form: any text, compared as it is
+      },
       sortable: ['title', 'price', 'created_at'], defaultSort: '-created_at',
       sorts: { by_status: ['status', 'title'] },
-      sums: { priceTotal: 'price' },
+      sums: { priceTotal: 'price', openCount: { count: 'status = ?', params: ['open'] }, withTax: { sql: 'price * ?', params: [1.2] } },
     });
     return { ...list, priceTotal: list.sums.priceTotal };
   });
@@ -79,6 +86,8 @@ export function setupFixture({ app, db, auth, hub }) {
     // the attempt never reaches the audit log.
     guardRecord(ctx, db.prepare('SELECT * FROM t_things WHERE id = ?').get(id), rules, 'write');
     const body = await ctx.body();
+    // The version goes to updateVersioned() as it arrived. Left out, or not a
+    // whole number, it is answered 422 there; no need to check it here.
     const { version, ...rest } = body;
     const { days, ...input } = check(rest, THING, { partial: true });
     if (days !== undefined) input.days = days === null ? null : JSON.stringify(days);
@@ -106,5 +115,11 @@ export function setupFixture({ app, db, auth, hub }) {
   });
 
   app.get('/api/_t/admin-only', auth.requireRole('admin'), () => ({ ok: true }));
+  // A refusal that names its rule, for the page and for tests.
+  app.post('/api/_t/refuse', auth.requireUser, async (ctx) => {
+    const { why } = check(await ctx.body(), { why: { type: 'enum', values: ['limit', 'approval'], required: true } });
+    if (why === 'limit') throw conflict('You can hold at most 3 of these at a time.', { rule: 'max_open' });
+    throw forbidden('Your account is waiting for approval.', { rule: 'not_approved' });
+  });
   app.get('/api/_t/boom', () => { throw new Error('secret internal detail'); });
 }

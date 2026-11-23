@@ -38,7 +38,7 @@ Any of the first, second, third or fifth failing means: do not publish.
 |---|---|---|
 | 5 | Every page has `<meta name="viewport" content="width=device-width, initial-scale=1">` | Each `.html` file |
 | 3 | The layout adapts | The CSS has `@media` rules by width, or wrapping flex or grid layouts |
-| 2 | Nothing is fixed wider than a phone | `width:` or `min-width:` above 480px outside a `@media` rule and without `max-width` beside it |
+| 2 | Nothing is fixed wider than a phone | `width:` or `min-width:` above 320px outside a `@media` rule and without `max-width` beside it |
 
 ## Real content (15)
 

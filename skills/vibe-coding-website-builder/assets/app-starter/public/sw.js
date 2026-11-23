@@ -6,7 +6,7 @@
 // Change VERSION whenever a file in SHELL changes, or devices keep the old one.
 
 const VERSION = 'v1';
-const SHELL = ['/', '/login', '/account', '/app.css', '/js/api.js', '/js/shell.js', '/js/live.js', '/js/merge.js', '/js/offline.js', '/js/home.js', '/js/login.js', '/js/account.js', '/favicon.svg'];
+const SHELL = ['/', '/login', '/account', '/app.css', '/js/api.js', '/js/shell.js', '/js/ui.js', '/js/live.js', '/js/merge.js', '/js/offline.js', '/js/home.js', '/js/login.js', '/js/account.js', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -1,6 +1,6 @@
 {
   "name": "vibe-coding-website-builder",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Website and web app builder skill for vibe coding: build, check and publish a simple website or a full app with sign-in, roles and a database, without knowing how to code. A 0-100 ready-to-publish check, a tested app starter with no packages, and click-by-click publishing steps.",
   "author": {
     "name": "mr-Imran",

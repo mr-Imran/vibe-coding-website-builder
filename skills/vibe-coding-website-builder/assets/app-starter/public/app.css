@@ -115,6 +115,15 @@ th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var
 }
 #status[data-kind="error"]:not(:empty) { background: var(--danger); }
 
+/* A list's choices (search, filters, order) above it, and its pages below.
+   See createList() in js/ui.js; the People screen is the example. */
+.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1rem; margin: 0 0 0.75rem; }
+.filters .field { flex: 1 1 9rem; margin: 0; }
+.pager { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 0.75rem 0 1.5rem; }
+.pager p { margin: 0; color: var(--soft); flex: 1 1 auto; }
+.pager:empty { display: none; }
+.empty { color: var(--soft); padding: 1.25rem 0.75rem; }
+
 dialog { width: min(26rem, calc(100% - 2rem)); border: 1px solid var(--line); border-radius: 10px; padding: 1.5rem; color: var(--ink); background: var(--surface); }
 dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 dialog h2 { margin-top: 0; }

@@ -15,7 +15,7 @@ import { solveAssignment } from '../core/solve.js';
 import { defineWorkflow, describe as describeRun, recoverWorkflows, runWorkflow } from '../core/workflow.js';
 import { createOutbox, memoryStore, threeWayMerge } from '../public/js/merge.js';
 import { CORE, setupFixture } from './fixture.js';
-import { startApp } from './helpers.js';
+import { runAll, startApp } from './helpers.js';
 
 describe('advanced', () => {
   let t;
@@ -275,8 +275,11 @@ describe('advanced', () => {
     const script = path.resolve(import.meta.dirname, 'race-worker.js');
     const dbFile = path.join(t.dataDir, 'app.db');
     const startAt = Date.now() + 1500;
-    const outputs = await Promise.all(firstUsers.map((first) =>
+    // Wait for all four, also when one fails: see runAll() in helpers.js.
+    const outputs = await runAll(firstUsers.map((first) =>
       run(process.execPath, [script, dbFile, String(slotId), String(first), String(each), String(startAt)])));
+    const failed = outputs.filter((o) => o instanceof Error);
+    assert.equal(failed.length, 0, `a program failed: ${failed.map((e) => e.stderr || e.message).join(' | ')}`);
     const wins = outputs.map((o) => Number(o.stdout.trim()));
     assert.equal(wins.reduce((a, b) => a + b, 0), stock, `places given out per program: ${wins.join(', ')}`);
     assert.equal(t.db.prepare('SELECT remaining FROM t_slots WHERE id = ?').get(slotId).remaining, 0);

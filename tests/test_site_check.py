@@ -197,6 +197,15 @@ class SiteCheckTests(unittest.TestCase):
         make_site(self.dir, extra={"style.css": GOOD_CSS + ".box { width: 1200px; max-width: 100%; }\n"})
         self.assertEqual(self.status(check(self.dir), "phone.fixed"), "pass")
 
+    def test_fixed_width_is_measured_against_the_narrowest_phone(self):
+        # 400 pixels fits a tablet but not a phone 360 or 390 pixels wide.
+        make_site(self.dir, extra={"style.css": GOOD_CSS + ".box { width: 400px; }\n"})
+        self.assertEqual(self.status(check(self.dir), "phone.fixed"), "fail")
+        make_site(self.dir, extra={"style.css": GOOD_CSS + ".box { min-width: 360px; }\n"})
+        self.assertEqual(self.status(check(self.dir), "phone.fixed"), "fail")
+        make_site(self.dir, extra={"style.css": GOOD_CSS + ".box { width: 320px; }\n"})
+        self.assertEqual(self.status(check(self.dir), "phone.fixed"), "pass")
+
     def test_placeholder_text_fails(self):
         make_site(self.dir, body="<p>Lorem ipsum dolor sit amet.</p><p>Call (555) 555-0199</p>")
         rep = check(self.dir)

@@ -16,6 +16,7 @@ import { now, tx } from './db.js';
 import { HttpError, forbidden, invalid, notFound, tooMany, unauthorized } from './errors.js';
 import { check, idParam } from './validate.js';
 import { audit } from './policy.js';
+import { listQuery } from './records.js';
 
 const scryptAsync = promisify(scrypt);
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
@@ -225,9 +226,19 @@ export function createAuth({ db, config }) {
 
     // Managing people: the highest role only.
     const admin = requireRole(config.roles[0]);
-    app.get('/api/users', admin, () => ({
-      users: db.prepare('SELECT id, email, name, role, active, created_at FROM users ORDER BY name').all(),
-    }));
+    app.get('/api/users', admin, (ctx) => {
+      const list = listQuery(db, {
+        table: 'users', columns: ['id', 'email', 'name', 'role', 'active', 'created_at'], query: ctx.query,
+        search: { q: ctx.query.q, columns: ['name', 'email'] },
+        filters: {
+          role: { check: { type: 'enum', values: config.roles, label: 'Role' } },
+          active: { check: { type: 'bool', label: 'Can sign in' } },
+        },
+        sortable: ['name', 'email', 'role', 'created_at'], defaultSort: 'name',
+        sums: { canSignIn: { count: 'active = 1' } },
+      });
+      return { ...list, users: list.rows };
+    });
     app.post('/api/users', admin, async (ctx) => {
       const input = check(await ctx.body(), { ...SIGNUP, role: { type: 'enum', values: config.roles, required: true, label: 'Role' } });
       const id = await createUser(input);

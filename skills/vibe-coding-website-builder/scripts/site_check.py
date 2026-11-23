@@ -33,7 +33,7 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp", ".tif",
 MAX_SCAN_BYTES = 5 * 1024 * 1024
 BIG_IMAGE = 500 * 1024           # one picture heavier than this slows a phone down
 HOME_BUDGET = 3 * 1024 * 1024    # everything the home page loads from this folder
-PHONE_WIDTH = 480                # a fixed width above this does not fit a phone
+PHONE_WIDTH = 320                # a fixed width above this does not fit the narrowest phones
 
 AREAS = [
     ("safe", "Safe to publish"),

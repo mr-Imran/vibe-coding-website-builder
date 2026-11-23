@@ -22,6 +22,36 @@
   <main id="main">
     <h1>People</h1>
 
+    <!-- The list's choices. Each named field is sent to the route as ?name=value (see createList in js/ui.js). -->
+    <form id="filters" class="filters" role="search" novalidate>
+      <div class="field">
+        <label for="q">Search</label>
+        <input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="Name or email">
+      </div>
+      <div class="field">
+        <label for="filter-role">Role</label>
+        <select id="filter-role" name="role"></select>
+      </div>
+      <div class="field">
+        <label for="filter-active">Can sign in</label>
+        <select id="filter-active" name="active">
+          <option value="">Everyone</option>
+          <option value="1">Can sign in</option>
+          <option value="0">Switched off</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sort">Order</label>
+        <select id="sort" name="sort">
+          <option value="name">Name, A to Z</option>
+          <option value="-name">Name, Z to A</option>
+          <option value="-created_at">Newest first</option>
+          <option value="role">Role</option>
+        </select>
+      </div>
+    </form>
+    <p id="people-count" class="hint"></p>
+
     <div class="table-scroll">
       <table class="stack">
         <caption class="visually-hidden">Everyone with an account</caption>
@@ -31,6 +61,7 @@
         <tbody id="people"></tbody>
       </table>
     </div>
+    <div id="pager" class="pager"></div>
 
     <h2>Add someone</h2>
     <form id="add-form" class="narrow-form" novalidate>

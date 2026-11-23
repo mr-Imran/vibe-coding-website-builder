@@ -141,7 +141,12 @@ Then the loop that makes this hold for the whole app: for every route with
 an id in it, a request from the wrong user is refused. Take the routes from
 `t.app.routes` (each has `method`, `pattern` and `opts`; see section 7 of
 `references/app.md`) and pick those whose `pattern` contains `:id`, so a
-route added later is covered without anyone remembering to add it.
+route added later is covered without anyone remembering to add it. A record
+that every signed-in person may look at (a class, a machine) is not a
+restricted record: name its read route in a short `shared` list at the top
+of the test, with the reason, as section 7 of `references/app.md` shows.
+Only `GET` routes belong there. Do not remove a route to make the loop
+pass.
 
 **Mistakes to avoid.** Checking the role and forgetting the ownership.
 Filtering in the page. A second route to the same data (an export, a search,
@@ -226,9 +231,20 @@ When each thing can be held by one person only (one slot, one person),
 people in one slot":
 `CREATE UNIQUE INDEX one_booking_per_slot ON bookings(slot_id) WHERE status = 'booked';`
 
-Giving it back (a cancellation) is the mirror image, also in one
-transaction, and only if the booking was still active, so that cancelling
-twice does not free two seats.
+Giving it back (a cancellation) is the mirror image, `giveBack()` from the
+same file, also in one transaction, and only if the booking was still
+active, so that cancelling twice does not free two seats:
+
+```js
+tx(db, () => {
+  const done = db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ? AND status = 'booked'").run(id);
+  if (done.changes === 1) giveBack(db, 'classes', booking.class_id);
+});
+```
+
+Both helpers find the row by `id`. For a table keyed by something else (a
+credit balance keyed by `user_id`), pass `{ key: 'user_id' }` as the last
+argument: `takeOne(db, 'balances', user.id, 'credits', 1, { key: 'user_id' })`.
 
 **The screen.** The loser sees a clear sentence and the list refreshes to
 show nothing left. With A01 in place, everyone watching sees the count drop
@@ -275,7 +291,12 @@ the classic double booking.
 
 The starter's "four separate programs" test shows the stronger form, where
 the requests really do run at the same moment; copy it when the result
-matters.
+matters. Copy its `runAll()` (from `tests/helpers.js`) with it, not a bare
+`Promise.all`: `Promise.all` gives up when the first program fails while
+the others still have the database open, the clean-up then fails too
+(Windows will not delete a file that is in use), and the report shows the
+clean-up's error where the real one should be. `runAll()` waits for every
+program and hands back each result or error; assert on them afterwards.
 
 Do not weaken the database's own rules to make a test pass: the `CHECK` and
 `UNIQUE` rules are the last line that holds when code is wrong.

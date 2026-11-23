@@ -21,7 +21,7 @@ compatibility: >-
   references/checklist.md lists the same checks to do by reading the files.
   Apps need Node.js 22.13 or newer on the person's computer and nothing else.
 metadata:
-  version: "0.2.1"
+  version: "0.2.2"
 ---
 
 # Vibe Coding Website Builder
@@ -262,7 +262,10 @@ Read `references/app.md` before anything else. In short:
    as met when one of the app's own tests, named with its id, passes;
    `node tools/rubric.js --write` in the project folder prints the table.
 5. **Run the page check** on the project folder as for a site; it reads the
-   app's `public/` folder.
+   app's `public/` folder. Then look at the screens: `node tools/look.js`
+   opens every page as every role in a browser without a window, at phone
+   and desktop width, saves a picture of each and reports what only a
+   browser shows (section 8 of `references/app.md`).
 6. **Hand over** with the report template in section 10 of
    `references/app.md`, not the site's template above: how to create an
    account, start the app and sign in (on Windows, three files to
@@ -381,8 +384,9 @@ site has to be published again for visitors to see it if it is already online.
 | `scripts/site_check.py [folder] [--summary] [--json] [--min N]` | Scores a site folder from 0 to 100 and lists what to fix, most important first. Reads files only: runs nothing, sends nothing, changes nothing. `--summary` prints the score and area totals; `--min N` exits 1 below N. |
 
 The app starter has its own tools, run with Node from the project folder:
-`node --test` runs every test, and `node tools/rubric.js --write` reports them
-against M01 to A08.
+`node --test` runs every test, `node tools/rubric.js --write` reports them
+against M01 to A08, and `node tools/look.js` looks at every screen in a
+browser as each role (it needs Chrome or Edge on the computer).
 
 ## References
 

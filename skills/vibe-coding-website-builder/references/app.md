@@ -52,7 +52,8 @@ One Node.js program, one database file, no packages to install.
 ├── public/              the pages, styles and page scripts
 ├── tests/               the proof: one test file per module, plus the core's
 ├── tools/               rubric.js (the tests, counted against the requirements),
-│                        add-user.js (make an account), seed.js (example data)
+│                        add-user.js (make an account), seed.js (example data),
+│                        look.js (every screen in a browser, as every role)
 ├── start-app.cmd, add-account.cmd, load-example-data.cmd
 │                        the same three things by double-click, on Windows
 ├── data/                the database file (created when the app runs; never shared)
@@ -114,8 +115,12 @@ project folder, including the files whose names start with a dot. Then:
 1. Run `node --test` in the project folder. All of the core's tests must pass
    before you add anything, so you know the starting point works on this
    machine.
-2. Name the app: `appName` and the roles in `config.js`, the name in
-   `package.json`, and "My app" in the pages under `public/`.
+2. Name the app: `appName` in `config.js`, the name in `package.json`, and
+   "My app" in every page under `public/` (the title, the description and
+   the link at the top left of each). No script holds the name. A core test
+   ("core M08 every page carries the app's name") fails while a page's
+   title lacks the name or "My app" is left anywhere in `public/`, so run
+   the tests after renaming and it tells you what you missed.
 3. Set the roles in `config.js`, most powerful first, and `defaultRole`. The
    first one manages people. Nothing else needs renaming: the People screen
    and its menu entry are written for `'top'`, which means "the first role,
@@ -135,6 +140,15 @@ with `startPage()` from that file: `startPage()` for anyone signed in,
 `startPage(['staff', 'manager'])` for named roles, `startPage('top')` for the
 first role.
 
+**People, and the app's own people.** The starter's People screen is about
+accounts: who can sign in, with which role, and their password. Many apps
+also need a screen about the same people as the business sees them (members
+to approve, students and their credits). Keep both and make the difference
+plain in their names: rename the starter's menu entry and heading to
+"Accounts", call the app's own screen by the business's word ("Members"),
+and put a line on each that links to the other. Do not merge the app's
+fields into the starter's screen; it is covered by core tests as it is.
+
 What `core/` gives you, so that you do not write it again:
 
 | File | Use it for |
@@ -143,9 +157,9 @@ What `core/` gives you, so that you do not write it again:
 | `time.js` | `localParts()` and `zonedToUtc()` for rules about the clock on the wall where the business is |
 | `auth.js` | Sign-up, sign-in, sign-out, password change, managing people; the guards `auth.requireUser` and `auth.requireRole('admin')`; `auth.on('user.created' / 'user.changed', fn)` to react to accounts |
 | `validate.js` | `check(body, schema)` for everything a person sends, including lists (`type: 'list'`); `idParam()` |
-| `errors.js` | `notFound()`, `forbidden()`, `conflict()`, `invalid()`: answers a person can read |
+| `errors.js` | `notFound()`, `forbidden()`, `conflict()`, `invalid()`: answers a person can read. Each takes a last argument that names the rule: `conflict('...', { rule: 'max_open' })` |
 | `policy.js` | `guardRecord()` for "may this user touch this record"; `audit()` |
-| `records.js` | `listQuery()` for search, filter, sort (one column or a named order over several), pages and totals; `updateVersioned()`; `takeOne()` |
+| `records.js` | `listQuery()` for search, checked filters, sort (one column or a named order over several), pages, totals and counts; `updateVersioned()` for edits; `takeOne()` and its mirror image `giveBack()` for things that run out. The last three find a row by `id`, or by another column with `{ key: 'user_id' }` |
 | `backup.js` | `GET /api/backup`: the first role downloads a copy of the whole database. Already registered and on the People screen |
 | `idempotency.js` | `once(ctx, work)` so a double click or a resend happens once |
 | `realtime.js` | Live updates to the people allowed to see them (A01) |
@@ -153,6 +167,14 @@ What `core/` gives you, so that you do not write it again:
 | `workflow.js` | Multi-step jobs that undo themselves when a step fails (A07) |
 | `csv.js` | Importing files with duplicates and gaps, with a report (A08) |
 | `solve.js` | Working out a plan under rules, or explaining why none exists (A02) |
+
+And in `public/js/`, for the pages:
+
+| File | Use it for |
+|---|---|
+| `api.js` | `api()` for every request; `el()` to build what is shown and `fill()` to replace what is inside a node; `showFieldErrors()`, `withBusy()`, `announce()` |
+| `shell.js` | `startPage()`: the session, the menu, sign out |
+| `ui.js` | `createList()`: a list with search, filters, order, pages and its four states; `ask()`: a yes-or-no question in the page |
 
 Use these helpers. Each one exists because the hand-written version of it is
 where apps built in a hurry go wrong: a list that puts the search text into
@@ -205,7 +227,7 @@ CREATE TABLE bookings (
 **The routes** go in `modules/bookings.js`, registered in `modules/index.js`:
 
 ```js
-import { tx, now } from '../core/db.js';
+import { tx } from '../core/db.js';
 import { conflict, invalid } from '../core/errors.js';
 import { once } from '../core/idempotency.js';
 import { guardRecord } from '../core/policy.js';
@@ -219,18 +241,19 @@ const rules = {
   write: (u, b) => u.role === 'admin' || (b.member_id === u.id && b.status === 'booked'),
 };
 
-export function register(app, { db, auth, hub }) {
+export function register(app, { db, config, auth, hub }) {
   app.post('/api/bookings', auth.requireRole('member', 'admin'), (ctx) => once(ctx, async () => {
     const { class_id } = check(await ctx.body(), { class_id: { type: 'int', required: true, min: 1, label: 'Class' } });
+    const at = config.now().toISOString();                      // the business's clock: a test can set it
     const id = tx(db, () => {                                   // everything below happens, or none of it
       const cls = db.prepare('SELECT * FROM classes WHERE id = ?').get(class_id);
       if (!cls) throw invalid({ class_id: 'That class does not exist.' });
-      if (cls.starts_at <= now()) throw conflict('This class has already started.');
+      if (cls.starts_at <= at) throw conflict('This class has already started.', { rule: 'started' });
       const open = db.prepare("SELECT COUNT(*) AS n FROM bookings WHERE member_id = ? AND status = 'booked'").get(ctx.user.id).n;
-      if (open >= MAX_OPEN_BOOKINGS) throw conflict(`You can hold at most ${MAX_OPEN_BOOKINGS} bookings at a time.`);
-      if (!takeOne(db, 'classes', class_id)) throw conflict('Sorry, the last place has just been taken.');
+      if (open >= MAX_OPEN_BOOKINGS) throw conflict(`You can hold at most ${MAX_OPEN_BOOKINGS} bookings at a time.`, { rule: 'max_open' });
+      if (!takeOne(db, 'classes', class_id)) throw conflict('Sorry, the last place has just been taken.', { rule: 'full' });
       return Number(db.prepare('INSERT INTO bookings (class_id, member_id, created_at) VALUES (?, ?, ?)')
-        .run(class_id, ctx.user.id, now()).lastInsertRowid);
+        .run(class_id, ctx.user.id, at).lastInsertRowid);
     });
     hub.publish('class.changed', { id: class_id }, { audience: () => true });
     ctx.status(201);
@@ -261,6 +284,19 @@ What that example does, and every route must do:
   be rolled back with everything else.
 - **Rules live in one place**, next to the data they guard, as named
   constants and short functions, so the test can name the rule it proves.
+  When a route can refuse for more than one reason, name the reason in the
+  refusal: `conflict('...', { rule: 'max_open' })`,
+  `forbidden('...', { rule: 'not_approved' })`. The page reads it as
+  `err.rule` and a test as `res.body.error.rule`, so neither has to
+  recognise a rule by the wording of its message.
+- **An edit sends back the version it started from**, and the route hands it
+  to `updateVersioned()` as it arrived:
+  `const { version, ...rest } = await ctx.body();` then
+  `const input = check(rest, SCHEMA, { partial: true });` then
+  `updateVersioned(db, 'classes', id, version, input, [...columns])`.
+  A version that is missing or not a whole number is answered 422 by the
+  helper; one that is out of date is answered 409 with the record as it is
+  now. Do not check the version yourself.
 - **A record fetched by id is guarded** with `guardRecord` before it is
   shown or changed, and before the request body is read or checked. Guard
   first, then validate: the other way round, a malformed request aimed at
@@ -270,7 +306,11 @@ What that example does, and every route must do:
   credit balance) gets its own table keyed by the user's id. Do not edit
   `core/auth.js` to add columns. Create the row when the account is created:
   `auth.on('user.created', (user) => db.prepare('INSERT INTO profiles (user_id) VALUES (?)').run(user.id))`,
-  in the module's `register`. It fires for every new account, however it was
+  in the module's `register`. Such a table is keyed by `user_id`, not `id`,
+  so tell the helpers:
+  `updateVersioned(db, 'profiles', user.id, version, input, columns, { key: 'user_id' })`,
+  and the same last argument for `takeOne()` and `giveBack()` (a credit
+  balance). It fires for every new account, however it was
   made, in the same transaction. `auth.on('user.changed', (user, before) => ...)`
   fires when a role changes or an account is switched off or on; use it when
   that should have a consequence (their future bookings are released). When
@@ -284,19 +324,44 @@ What that example does, and every route must do:
   people in the page. A rule about a time of day ("has the 9 o'clock class
   started?", "no bookings after 6 pm the day before") is about the clock
   where the business is: convert with `localParts()` and `zonedToUtc()` from
-  `core/time.js` and `config.timeZone`. Take the current moment from
-  `config.now()`, never `new Date()` directly, so that a test can set the
-  clock (`startApp({ config: { now: () => new Date('2026-03-02T08:55:00Z') } })`)
-  and check the rule exactly at its edge.
+  `core/time.js` and `config.timeZone`.
+- **There are two clocks, on purpose.** `config.now()` is the business's
+  clock. Use it for every rule ("has it started?", "is the deadline past?")
+  and for every time the app's own tables store (`created_at`, `booked_at`,
+  `cancelled_at`): `const at = config.now().toISOString()`. A test can set
+  it (`startApp({ config: { now: () => new Date('2026-03-02T08:55:00Z') } })`)
+  and check a rule exactly at its edge, and what the rule compares against
+  was stamped by the same clock. `now()` from `core/db.js` is the real
+  clock. The core uses it for its own bookkeeping, which must not move when
+  a test sets the time: sessions, the sign-in limit, and the `at` column of
+  `audit_log`. So a figure worked out from the audit log ("refusals in the
+  last 7 days") compares against `now()`, not `config.now()`. Never call
+  `new Date()` for the current moment in a module.
 - **A list that needs columns from two tables** (a booking with its class
   title) is a view: create it in a migration and give its name to
   `listQuery()`. Pass `sums: { total: 'price_cents' }` for a total over
-  everything that matches the search and filters, not just the page shown.
+  everything that matches the search and filters, not just the page shown;
+  `sums: { open: { count: 'remaining > 0 AND active = 1' } }` counts the
+  matching rows that meet a condition, with no extra column in the view.
   The view needs a column called `id` (rows that tie are ordered by it), or
   pass `tiebreak: 'some_unique_column'`. For an order over several columns
   ("by day, then start time, then room"), name it:
   `sorts: { timetable: ['day', 'starts_at', 'room'] }`, asked for with
   `?sort=timetable`.
+- **A filter is checked like a form field.** In `listQuery()`'s `filters`,
+  give each one the rule its value must meet:
+  `status: { check: { type: 'enum', values: ['booked', 'cancelled'] } }`,
+  `class_id: { check: { type: 'int', min: 1 } }`. Then `?status=maybe` is
+  answered 422 with the reason, not with an empty list that looks like "no
+  bookings". A filter whose condition has to be worked out takes a `where`
+  function: it gets the checked value and returns `{ sql, params }`, or
+  `null` for no condition. "Upcoming only", as a tick box:
+  `upcoming: { check: { type: 'bool' }, where: (on) => (on ? { sql: 'starts_at >= ?', params: [config.now().toISOString()] } : null) }`.
+  "On this day", where the day is local and the stored times are UTC:
+  `day: { check: { type: 'date' }, where: (d) => ({ sql: 'starts_at >= ? AND starts_at < ?', params: dayRange(d) }) }`,
+  with `dayRange` built from `zonedToUtc()` for midnight that day and the
+  next. A condition that does not come from the address at all (only this
+  member's rows) goes in `where`, beside `filters`.
 - **Messages are written for the person**, saying what happened and what they
   can do: "Sorry, the last place has just been taken", not "409".
 
@@ -321,7 +386,12 @@ an app's screens are still web pages. What differs:
   another user's browser, so do not loosen it.
 - **Build what is shown with `el()`** from `js/api.js`, or `textContent`.
   Never join strings into HTML when any part came from a person or the
-  database.
+  database. `el()` leaves out a child that is `null` or `false`, so a part
+  can be conditional. To replace what is inside a node, use
+  `fill(node, ...children)` from the same file, which does the same; the
+  browser's own `node.replaceChildren(text, more ? button : null)` prints
+  the word "null" on the page. A core test refuses `replaceChildren` in
+  page scripts for that reason.
 - **Talk to the server only through `api()`.** It adds the session token and
   the key that makes a resend harmless, and gives one kind of error.
 - **Every screen has four states**: loading, nothing here yet (with what to
@@ -334,11 +404,22 @@ an app's screens are still web pages. What differs:
   at the bottom of the window wherever the person has scrolled to, and is
   read out by screen readers. Each signed-in page needs
   `<p id="status" role="status" aria-live="polite"></p>` for it. Do not use
-  the browser's own `alert`, `confirm` or `prompt` boxes: ask in the page
-  (the People screen's "set a new password" dialog is the pattern).
+  the browser's own `alert`, `confirm` or `prompt` boxes: ask in the page.
+  For a yes-or-no question (delete, cancel, switch off) that is
+  `if (await ask({ title: 'Cancel this booking?', text: '...', yes: 'Cancel the booking', danger: true }))`
+  from `js/ui.js`; nothing has to be added to the page's HTML. For a
+  question that needs something typed, the People screen's "set a new
+  password" dialog is the pattern.
 - **Every list** of more than a handful has search, at least one filter, a
   way to sort, and pages; and shows a calculated figure where one makes sense
-  (a total, a count, what is left).
+  (a total, a count, what is left). `createList()` from `js/ui.js` is that
+  list, written once: give it the route, the table's `<tbody>`, a function
+  that builds one row, a `<form>` whose named fields are the search box, the
+  filters and the order, and an element for the pages. It shows the four
+  states, waits a moment while someone types, ignores an answer that a
+  newer search has overtaken, and steps back when the last row of the last
+  page is removed. The People screen (`people.html`, `js/people.js`) is the
+  example to copy, including the figure above the list.
 - **Every table works on a phone.** Give it `class="stack"`, make the first
   cell of each row a `<th scope="row">`, and give every other cell
   `data-label="Column name"`: on a narrow screen each row becomes a card
@@ -396,7 +477,22 @@ test('M03 no route of the app answers without a session', async () => {
 ```
 
 The same list drives A03's loop: for every route whose `pattern` has `:id`
-in it, a signed-in user who does not own record 1 is refused.
+in it, a signed-in user who does not own record 1 is refused. Some records
+are meant to be seen by everyone who is signed in (a class, a machine), and
+their read route rightly answers 200. Name those in a list at the top of
+the test, the way `open` is above, each with its reason in a comment, and
+leave every other route in the loop:
+
+```js
+const shared = ['GET /api/classes/:id'];                // any member may look at a class; changing it is still refused below
+for (const route of t.app.routes.filter((r) => r.pattern.includes(':id') && !shared.includes(`${r.method} ${r.pattern}`))) {
+  const res = await stranger.request(route.method, route.pattern.replace(/:\w+/g, '1'), route.method === 'GET' ? undefined : {});
+  assert.ok([403, 404].includes(res.status), `${route.method} ${route.pattern} answered ${res.status}`);
+}
+```
+
+Do not delete a route to make the loop pass, and do not put a write route
+(`PATCH`, `DELETE`, `POST`) in the list.
 
 **What the app's M07 test adds.** The core's M07 test already reads every
 `.html` file in `public/`, including the app's, for the language, the
@@ -406,8 +502,8 @@ The app's test checks what only the app knows: every page a menu entry or a
 link points to exists; every page loads its own script and that file exists;
 every table has a caption and either `class="stack"` or a reason not to;
 every button has a `type`; no fixed width in `app.css` is wider than a phone
-(320 pixels); and each form's fields are in the order a keyboard user would
-expect. These read files. They do not show that a page looks right, so say
+(320 pixels, the figure the page check uses too); and each form's fields are
+in the order a keyboard user would expect. These read files. They do not show that a page looks right, so say
 in the report which screens you looked at, at which widths, and how.
 
 Tests that send many wrong passwords from one place run into the sign-in
@@ -459,18 +555,38 @@ check what that person and the database end up with.
   tested: one account per role with passwords made up when it runs and shown
   once, a refusal to load twice, and a refusal on the live app unless asked.
   The owner runs it with `load-example-data.cmd` or `node tools/seed.js`.
+  When the example needs two people of one kind (to show that one member
+  cannot open another member's booking), list the second in
+  `EXTRA_ACCOUNTS` at the top of that file: each entry becomes an account
+  with its own made-up password, shown with the others, and reaches
+  `addExampleData()` as `users.<key>`. Do not insert accounts by hand there:
+  they would have no password anyone can use, and a core test checks for it.
   Make dates relative to the moment it runs, and count what you promise: if
   the hand-over says "slots for the next 14 days", load it in the evening and
   check that today is not empty and the fourteenth day is there. Example data
   is labelled as made up in the README.
-- Look at every screen as each role, at phone width and desktop width. With
-  no browser tool, a headless browser does it: Chrome and Edge can be started
-  without a window and driven from a short Node script over their debugging
-  port (`--headless=new --remote-debugging-port=...`), which also reports
-  script errors and security-policy violations; see the last section of
-  `references/build.md`. Try the journey from section 3 by hand once. Then try
-  to break it: the back button after signing out, a second tab, a form sent
-  empty, the address of someone else's record.
+- **Look at every screen** as each role, at phone width and desktop width:
+  `node tools/look.js`. It needs Chrome or Edge on the computer and nothing
+  else. It loads the example data into a throw-away copy, starts the app on
+  a spare port, signs in as each example account, opens every page in the
+  menu at 390 and 1280 pixels, and saves a picture of each in `look/`
+  (which is not committed). It reports script errors, anything the security
+  policy blocked, failed requests, pages that scroll sideways and the word
+  "null" printed where a value was missing; then it signs out and presses
+  Back, which must not show the last person's page again. Add
+  `--page /classes/new` for a page no menu entry leads to. Then open the
+  pictures and look: the tool cannot tell whether a screen looks right, and
+  it does not click through the journey. It exits with 2 when there is no
+  browser; say so in the report, and do not claim the screens were looked at.
+- Try the journey from section 3 by hand once (through the routes, as the
+  M01 test does, or in a browser tool if you have one). Then try to break
+  it: a second tab, a form sent empty, the address of someone else's record.
+- **Signing out on a shared computer.** The starter already stops the Back
+  button from showing the last person's page: pages are never kept by the
+  browser, and a page for signed-in people that comes back from the
+  browser's memory is hidden and loaded afresh. That holds for every page
+  whose script starts with `startPage()`. Keep both halves; `look.js`
+  checks the result.
 - Run the page check on the project folder as for a site
   (`scripts/site_check.py`). It reads `public/`. Stop the app when you are
   done, and say so.
@@ -509,10 +625,13 @@ yellow or assumed, and how it is published.
 
 An app's report has more to carry than a site's, so it has its own shape.
 Keep every part; a part with nothing in it says so in one line. Plain words
-throughout, no file paths in the first half.
+throughout. Give the project folder's full path once, at the top, because
+the owner has to find the files to double-click; after that, name files
+without paths, and keep code paths (`modules/...`) out of the first half.
 
 ```
 **[App name] is built and runs on your computer. It is not online yet.**
+It is in this folder: [full path of the project folder]
 
 **To see it**
 1. [Only if there are no accounts yet: create yours. Windows: double-click
@@ -533,7 +652,10 @@ number of tests. M08 in its own words: documented, not yet online.]
 [N tests, all passing. They cover the cases listed in RUBRIC.md, not
 everything; nobody has tried to break in on purpose.]
 [Page check: N out of 100. A checklist of common faults, not a judgement of
-the design. Which screens you looked at yourself, at which widths, and how.]
+the design. Which screens you looked at yourself, at which widths, and how:
+"tools/look.js opened N screens as each role at 390 and 1280 pixels and
+found nothing; I looked at the pictures of ...", or that there was no
+browser and nobody has looked.]
 
 **What I assumed**
 [Every rule or detail you were not given, one line each, for them to

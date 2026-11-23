@@ -1,5 +1,7 @@
 # The database and anything else the running app writes
 data/
+# Pictures of the screens, taken by tools/look.js
+look/
 # Secrets and local settings
 .env
 .env.*

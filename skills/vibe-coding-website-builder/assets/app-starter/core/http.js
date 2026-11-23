@@ -154,10 +154,13 @@ export function createApp({ db, config, publicDir, auth = null, log = console })
     }
     const ext = path.extname(file).toLowerCase();
     res.setHeader('Content-Type', TYPES[ext] || 'application/octet-stream');
-    // The browser may keep a copy but must ask whether it is still current.
-    // Without this, people keep running last week's scripts after an update
-    // and report that "nothing changed".
-    res.setHeader('Cache-Control', 'no-cache');
+    // Scripts, styles and pictures: the browser may keep a copy but must ask
+    // whether it is still current. Without this, people keep running last
+    // week's scripts after an update and report that "nothing changed".
+    // Pages are not kept at all. A page a browser keeps is one it can show
+    // again on the Back button after the person has signed out; see
+    // reloadWhenRestored() in public/js/api.js for the other half of this.
+    res.setHeader('Cache-Control', ext === '.html' ? 'no-store' : 'no-cache');
     const modified = new Date(Math.floor(stat.mtimeMs / 1000) * 1000);
     res.setHeader('Last-Modified', modified.toUTCString());
     const since = Date.parse(req.headers['if-modified-since'] || '');

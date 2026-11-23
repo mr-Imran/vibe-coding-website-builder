@@ -4,6 +4,9 @@ const form = document.getElementById('auth-form');
 const submit = document.getElementById('submit');
 const switcher = document.getElementById('switch');
 let mode = 'login';
+// The app's name is written in the pages, not here: keep whatever follows
+// the dash in this page's own title.
+const appName = document.title.includes(' - ') ? document.title.slice(document.title.indexOf(' - ') + 3) : '';
 
 // Only ever go back to a page of this app after signing in.
 const next = new URLSearchParams(location.search).get('next');
@@ -15,7 +18,8 @@ function setMode(value) {
   mode = value;
   const signup = mode === 'signup';
   document.getElementById('title').textContent = signup ? 'Create an account' : 'Sign in';
-  document.title = `${signup ? 'Create an account' : 'Sign in'} - My app`;
+  const heading = signup ? 'Create an account' : 'Sign in';
+  document.title = appName ? `${heading} - ${appName}` : heading;
   document.getElementById('name-field').hidden = !signup;
   document.getElementById('password-hint').hidden = !signup;
   document.getElementById('password').autocomplete = signup ? 'new-password' : 'current-password';
