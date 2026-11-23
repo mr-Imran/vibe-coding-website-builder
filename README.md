@@ -101,6 +101,11 @@ Read these with some care:
 - For projects that need a build step, it checks the built folder if there is one and otherwise only looks for secrets.
 - The guides name hosting, form and payment services with their free limits as checked on 2026-11-23. Those change; the skill tells the agent to confirm them on the service's own page.
 
+## Related projects
+
+- [Claude SEO](https://github.com/AgriciDaniel/claude-seo) by Agrici Daniel (MIT): a free SEO audit plugin for Claude Code. This skill only covers the SEO basics of a new site (title, description, share picture, one main heading). When your site is online and you want a full audit of technical SEO, content, structured data and AI search, use Claude SEO. It is a separate project; none of its code is included here.
+- [launch-kit](https://github.com/mr-Imran/launch-kit), from the same author as this skill: gets a GitHub repository ready to launch and scores it from 0 to 100.
+
 ## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) explains the layout, how to try a change and how to run the test cases. The check has its own tests:
