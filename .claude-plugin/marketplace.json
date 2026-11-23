@@ -1,0 +1,15 @@
+{
+  "name": "vibe-coding-website-builder",
+  "description": "The vibe-coding-website-builder skill: a website builder for vibe coding that builds, checks and helps publish a simple website for someone who cannot code.",
+  "owner": {
+    "name": "mr-Imran",
+    "url": "https://github.com/mr-Imran"
+  },
+  "plugins": [
+    {
+      "name": "vibe-coding-website-builder",
+      "source": "./",
+      "description": "Website builder skill for vibe coding: build, check and publish a simple website without knowing how to code. Plain-language build, a 0-100 ready-to-publish score, hosted forms and payments, and click-by-click publishing steps."
+    }
+  ]
+}

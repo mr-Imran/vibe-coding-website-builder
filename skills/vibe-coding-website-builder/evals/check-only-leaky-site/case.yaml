@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: check-only-leaky-site
+expected_outcome: |
+  Nothing in the folder is changed. The reply says clearly not to publish yet and leads with the Stripe secret key in script.js, including that the key has to be replaced at Stripe and that the deposit button needs a different approach. It also reports, in plain words and most important first: the top picture whose file name differs by letter case, the contact form that sends nothing, the placeholder text and contact details, the links to localhost, and the layout that will not fit a phone. It asks whether the reviews and the customer number are real.
+context:
+  scaffold_script: place-files.sh

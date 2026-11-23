@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: publish-and-connect-form
+expected_outcome: |
+  One host is recommended with its catch, with numbered steps the owner follows in a browser and the exact folder to upload. The site is not claimed to be online, and no password or key is asked for in chat. The picture whose file name differs by letter case is fixed before publishing. The form is either connected in a way that needs no made-up address or carries a clear stand-in, and the reply says exactly what the owner must do to make messages arrive and how to test it. The reply covers cost (free address, own domain optional) and how to update the site later. The site's design and text are kept.
+context:
+  scaffold_script: place-files.sh

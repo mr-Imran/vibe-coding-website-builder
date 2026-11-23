@@ -1,0 +1,28 @@
+{
+  "//": "Recorded output of scripts/site_check.py on the test site in skills/vibe-coding-website-builder/evals/check-only-leaky-site, placed in a folder named my-site by its place-files.sh. Rendering this file runs nothing: python3 term_demo.py --spec assets/demo.json -o assets/demo.svg (term_demo.py comes from github.com/mr-Imran/launch-kit).",
+  "title": "vibe-coding-website-builder",
+  "cols": 84,
+  "rows": 28,
+  "steps": [
+    {
+      "comment": "A site made with AI over a weekend. Is it OK to publish?"
+    },
+    {
+      "cmd": "python3 site_check.py my-site --summary",
+      "output": "site check: my-site\n\nScore: 39/100    Verdict: DO NOT PUBLISH\n(39 of 100 points. A checklist of common problems, not a judgement of the design.)\n\n  Safe to publish      15/30\n  Everything works      7/25\n  Fits a phone          3/10\n  Real content          8/15\n  Found and shared      1/12\n  Easy and fast         5/8 \n\nSTOP. Something in these files must not go online. Fix that before anything else.\n"
+    },
+    {
+      "pause": 2
+    },
+    {
+      "comment": "What to fix, most important first"
+    },
+    {
+      "cmd": "python3 site_check.py my-site | grep '^[0-9]'",
+      "output": "1. Secret keys  (+15)  <-- do this first\n2. Titles, description and sharing  (+11)\n3. Broken links and pictures  (+8)\n4. Phone layout  (+7)\n5. Placeholder text and pictures  (+7)\n6. Forms  (+4)\n7. Addresses that only work on this computer  (+3)\n8. Links and buttons that do nothing  (+3)\n9. Heavy pictures  (+2)\n10. Descriptions and labels  (+1)\n"
+    },
+    {
+      "pause": 3
+    }
+  ]
+}
