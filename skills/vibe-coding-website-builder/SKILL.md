@@ -19,7 +19,7 @@ compatibility: >-
   The bundled check needs Python 3.8+ (standard library only). Without Python,
   references/checklist.md lists the same checks to do by reading the files.
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Vibe Coding Website Builder

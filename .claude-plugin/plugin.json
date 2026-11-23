@@ -1,6 +1,6 @@
 {
   "name": "vibe-coding-website-builder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Website builder skill for vibe coding: build, check and publish a simple website without knowing how to code. Plain-language build, a 0-100 ready-to-publish score, hosted forms and payments, and click-by-click publishing steps.",
   "author": { "name": "mr-Imran", "url": "https://github.com/mr-Imran" },
   "homepage": "https://github.com/mr-Imran/vibe-coding-website-builder",
