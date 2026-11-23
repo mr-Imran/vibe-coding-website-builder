@@ -1,6 +1,8 @@
 # vibe-coding-website-builder
 
-A website builder skill for vibe coding: an agent skill for Claude Code and other AI coding agents that builds a simple website for someone who cannot code, scores any AI-built site from 0 to 100 on whether it is ready to publish, and walks the owner through putting it online for free.
+A website builder skill for vibe coding: build, check and publish a simple website with AI, without writing code.
+
+It is an agent skill for Claude Code and other AI coding agents. It builds a simple site from a plain description, scores any AI-built site from 0 to 100 on whether it is ready to publish, and walks the owner through putting it online for free.
 
 <p align="center">
   <img src="assets/demo.svg" alt="The site check run on a test site that an AI built in a weekend: 39 out of 100, verdict DO NOT PUBLISH. The list of fixes starts with a secret key left in the page, then titles and sharing, broken links and pictures, phone layout, placeholder text and a form that sends nothing." width="738">
