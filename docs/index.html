@@ -52,13 +52,13 @@
         "@type": "SoftwareSourceCode",
         "@id": "https://mr-imran.github.io/vibe-coding-website-builder/#software",
         "name": "vibe-coding-website-builder",
-        "description": "An agent skill for Claude Code and other AI coding agents that builds a simple website for someone who cannot code, scores any AI-built site from 0 to 100 on whether it is ready to publish, and walks the owner through putting it online.",
+        "description": "An agent skill for Claude Code and other AI coding agents that builds a simple website or a full web app for someone who cannot code, scores any AI-built site from 0 to 100 on whether it is ready to publish, and walks the owner through putting it online.",
         "url": "https://mr-imran.github.io/vibe-coding-website-builder/",
         "codeRepository": "https://github.com/mr-Imran/vibe-coding-website-builder",
         "license": "https://opensource.org/licenses/MIT",
         "programmingLanguage": "Python",
         "runtimePlatform": "Claude Code",
-        "version": "0.1.1",
+        "version": "0.2.0",
         "datePublished": "2026-11-23",
         "dateModified": "2026-11-23",
         "isAccessibleForFree": true,
@@ -96,13 +96,13 @@
           },
           {
             "@type": "Question",
-            "name": "Can it build an online shop, a log-in or a chatbot?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Not by itself, on purpose. Those need a server and someone who can keep it secure. The skill says so plainly and links your simple site to a hosted service that does the job properly: a payment link, a hosted shop, a booking page or a form service." }
+            "name": "Can it build a real app with sign-in and a database?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. For a booking system, a member portal or anything with accounts and rules, it builds one small program with its database in one file and nothing to install, from a starter kit whose sign-in, roles and safety checks are already tested. Each requirement comes with a test. When a link to a hosted service would do the job, such as a payment link or a hosted shop, it recommends that instead, because it is cheaper to run and has less that can go wrong." }
           },
           {
             "@type": "Question",
             "name": "Where is my website hosted?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Wherever you choose. The site is a folder of plain files, so it works on any host. The skill recommends one free host with its catch and gives you numbered steps for your browser. You create the account and you click publish; the agent never asks for your password." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Wherever you choose. A simple site is a folder of plain files, so it works on any host, and the skill recommends a free one. An app needs a host that keeps a program running, which costs about five US dollars a month to stay awake. Either way you get numbered steps for your browser. You create the account and you click publish; the agent never asks for your password." }
           }
         ]
       }
@@ -119,6 +119,7 @@
       <nav aria-label="Main">
         <a href="#how">How it works</a>
         <a href="#check">The check</a>
+        <a href="#apps">Apps</a>
         <a href="#install">Install</a>
         <a href="#faq">Questions</a>
         <a href="https://github.com/mr-Imran/vibe-coding-website-builder">GitHub</a>
@@ -131,8 +132,8 @@
       <div class="wrap hero-grid">
         <div>
           <p class="eyebrow">A free skill for Claude Code and other AI coding agents</p>
-          <h1>Build a real website with AI, <span class="marker">even if you can't code</span></h1>
-          <p class="lead">Vibe Coding Website Builder is a free, open-source skill for Claude Code and other AI coding agents. Vibe coding a website is easy to start and easy to get wrong: this skill makes your agent build a simple site from your own words, check it for the mistakes you cannot see, and walk you through putting it online.</p>
+          <h1>Build a real website or web app with AI, <span class="marker">even if you can't code</span></h1>
+          <p class="lead">Vibe Coding Website Builder is a free, open-source skill for Claude Code and other AI coding agents. Vibe coding a website is easy to start and easy to get wrong: this skill makes your agent build a simple site, or a full app with sign-in and a database, from your own words, check it for the mistakes you cannot see, and walk you through putting it online.</p>
           <div class="actions">
             <a class="button" href="#install">Install it</a>
             <a class="text-link" href="https://github.com/mr-Imran/vibe-coding-website-builder">See the code on GitHub</a>
@@ -177,6 +178,10 @@
             <p>One recommended free host with its catch, and numbered steps for your browser. You make the account and you click publish. The agent never asks for a password.</p>
           </article>
           <article class="card">
+            <h3>A full app when you need one</h3>
+            <p>Sign-in, roles, a database and your business rules, as one program with nothing to install. Each requirement comes with a test, and you get a table showing which ones pass.</p>
+          </article>
+          <article class="card">
             <h3>Notes you can read</h3>
             <p>A plain text file next to your site says how to look at it, how to ask for changes, and how to publish it again later.</p>
           </article>
@@ -218,6 +223,31 @@
       </div>
     </section>
 
+    <section class="section" id="apps">
+      <div class="wrap">
+        <h2>When you need a web app, not just pages</h2>
+        <p class="lead">A booking system, a member portal, an order tracker. The skill builds it as one small program with its database in one file, from a starter kit whose sign-in, roles and safety checks are already written and tested. Every app meets the eight mandatory requirements; the advanced ones are built when you ask.</p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th scope="col">Every app</th><th scope="col">On request</th><th scope="col">The test it must pass</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>M01 Three connected modules, end to end</td><td>A01 Real-time sync</td><td>Two users update the same record at once</td></tr>
+              <tr><td>M02 Database with relationships</td><td>A02 Decisions and optimization</td><td>Conflicting constraints or an infeasible request</td></tr>
+              <tr><td>M03 Sign-in, roles, protected sessions</td><td>A03 Access control per record</td><td>A user tries to modify another user's restricted record</td></tr>
+              <tr><td>M04 Business rules</td><td>A04 Offline-first</td><td>Conflicting edits while one client is offline</td></tr>
+              <tr><td>M05 Search, filter, sort, calculations</td><td>A05 Concurrency and transactions</td><td>Several users request the last available resource</td></tr>
+              <tr><td>M06 Validation and failure recovery</td><td>A06 Outside API, fault tolerance</td><td>The API times out or returns malformed data</td></tr>
+              <tr><td>M07 Responsive, accessible pages</td><td>A07 Multi-step workflow</td><td>A middle step fails after earlier ones succeeded</td></tr>
+              <tr><td>M08 Live deployment and documentation</td><td>A08 Data processing and analytics</td><td>Duplicates, missing values, large volumes</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small">A requirement counts as met only when the app's own test for it passes. An app costs about five US dollars a month to keep awake online and puts other people's data in your care, so when a link to a hosted service would do the job, the skill says so first.</p>
+      </div>
+    </section>
+
     <section class="section band" id="install">
       <div class="wrap">
         <h2>Install it</h2>
@@ -254,13 +284,14 @@ claude plugin install vibe-coding-website-builder@vibe-coding-website-builder</c
             <li>Put a secret key or a password in a page.</li>
             <li>Create accounts, publish, buy a web address or pay for anything. Those are your clicks.</li>
             <li>Say your site is online before it has seen the address.</li>
-            <li>Build a log-in or a shop with a basket. It links your site to a hosted service that does that properly.</li>
+            <li>Fake a log-in inside a page, or build an app when a link to a hosted service would do.</li>
+            <li>Call an app secure. It says what was tested and what was not.</li>
             <li>Promise visitors or a place in search results.</li>
           </ul>
         </div>
         <div>
           <h2>How it was tested</h2>
-          <p>Three test cases, each run once with the skill and once without, by the same model, and marked by a separate agent.</p>
+          <p>Four test cases, each run once with the skill and once without, by the same model, and marked by a separate agent.</p>
           <div class="table-scroll">
             <table>
               <thead>
@@ -270,6 +301,7 @@ claude plugin install vibe-coding-website-builder@vibe-coding-website-builder</c
                 <tr><th scope="row">Build a site from a plain request</th><td>12 of 12</td><td>10 of 12</td></tr>
                 <tr><th scope="row">Check a site with a leaked payment key</th><td>12 of 12</td><td>11 of 12</td></tr>
                 <tr><th scope="row">Put a site online and fix its form</th><td>10 of 10</td><td>9 of 10</td></tr>
+                <tr><th scope="row">Build a booking app from a requirement list</th><td>15 of 15</td><td>12 of 15</td></tr>
               </tbody>
             </table>
           </div>
@@ -302,12 +334,12 @@ claude plugin install vibe-coding-website-builder@vibe-coding-website-builder</c
           <p>Run the check. It reads the files of any simple website and looks for the faults that are common on AI-built sites: secret keys left in the page, pictures and links that break once the site is online, forms that say thank you and send nothing, stand-in text, and pages that do not fit a phone. It gives a score from 0 to 100 and a verdict: ready, not yet, or do not publish.</p>
         </details>
         <details>
-          <summary>Can it build an online shop, a log-in or a chatbot?</summary>
-          <p>Not by itself, on purpose. Those need a server and someone who can keep it secure. The skill says so plainly and links your simple site to a hosted service that does the job properly: a payment link, a hosted shop, a booking page or a form service.</p>
+          <summary>Can it build a real app with sign-in and a database?</summary>
+          <p>Yes. For a booking system, a member portal or anything with accounts and rules, it builds one small program with its database in one file and nothing to install, from a starter kit whose sign-in, roles and safety checks are already tested. Each requirement comes with a test. When a link to a hosted service would do the job, such as a payment link or a hosted shop, it recommends that instead, because it is cheaper to run and has less that can go wrong.</p>
         </details>
         <details>
           <summary>Where is my website hosted?</summary>
-          <p>Wherever you choose. The site is a folder of plain files, so it works on any host. The skill recommends one free host with its catch and gives you numbered steps for your browser. You create the account and you click publish; the agent never asks for your password.</p>
+          <p>Wherever you choose. A simple site is a folder of plain files, so it works on any host, and the skill recommends a free one. An app needs a host that keeps a program running, which costs about five US dollars a month to stay awake. Either way you get numbered steps for your browser. You create the account and you click publish; the agent never asks for your password.</p>
         </details>
       </div>
     </section>

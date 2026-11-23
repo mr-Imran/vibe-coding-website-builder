@@ -1,0 +1,15 @@
+{
+  "name": "my-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A self-contained web app: one Node program, one database file, no packages to install.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "rubric": "node tools/rubric.js"
+  }
+}

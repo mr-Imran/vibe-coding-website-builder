@@ -1,0 +1,8 @@
+# The database and anything else the running app writes
+data/
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+node_modules/
+RUBRIC-RESULTS.md

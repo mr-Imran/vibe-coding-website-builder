@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: build-app-from-requirements
+expected_outcome: |
+  A working web app in the project folder that starts with one command and needs no packages installed, with at least three modules that depend on each other (members, machines and their slots, bookings), sign-in with hashed passwords and server-enforced roles, the four stated rules enforced on the server, lists with search, filter and sort, and automated tests that pass, including one where several users request the last slot at once and exactly one gets it, and one where a member is refused when trying to change another member's booking. The final message tells the owner in plain words how to start it and sign in, reports each requirement against evidence, says honestly that it is not online yet, names any rule that was assumed, and does not put real passwords or secrets in any file.

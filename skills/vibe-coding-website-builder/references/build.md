@@ -238,9 +238,16 @@ page. So also look:
   phone width (about 390 pixels) and a desktop width (about 1280). Look for
   text that overflows, things that overlap, pictures that are stretched, a
   page that scrolls sideways.
-- If you do not, read your own CSS once more as a narrow screen would apply
-  it, and tell the owner to make the browser window narrow to see the phone
-  layout.
+- If you do not, look for Chrome or Edge on the machine: both can take a
+  picture of a page without opening a window, for example
+  `chrome --headless=new --screenshot=phone.png --window-size=390,2000 <address>`
+  (the program is `chrome.exe` or `msedge.exe` under Program Files on Windows,
+  "Google Chrome" inside its application folder on macOS). Save the pictures
+  outside the site folder and look at them. For pages behind a sign-in, start
+  the browser with `--remote-debugging-port` and drive it from a short script.
+- If there is no browser at all, read your own CSS once more as a narrow
+  screen would apply it, and tell the owner to make the browser window narrow
+  to see the phone layout.
 
 Then open the page for the owner (`start`, `open` or `xdg-open` followed by
 the path to `index.html`), and tell them how to do it themselves: double-click

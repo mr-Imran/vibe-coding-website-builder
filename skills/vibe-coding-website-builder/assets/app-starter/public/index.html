@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home - My app</title>
+  <meta name="description" content="Sign in to use My app.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="bar">
+    <a class="brand" href="/">My app</a>
+    <nav aria-label="Main" id="nav"></nav>
+    <div class="who">
+      <span id="who-name"></span>
+      <button type="button" class="button quiet" id="sign-out">Sign out</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1 id="greeting">Home</h1>
+    <!-- Build the app's first screen here: what this person most often comes to do. -->
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+
+  <script type="module" src="/js/home.js"></script>
+</body>
+</html>

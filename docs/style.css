@@ -133,3 +133,6 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px soli
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 }
+
+/* Short figures such as "12 of 12" stay on one line. */
+.split table td { white-space: nowrap; }

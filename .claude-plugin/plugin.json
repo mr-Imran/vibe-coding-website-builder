@@ -1,10 +1,26 @@
 {
   "name": "vibe-coding-website-builder",
-  "version": "0.1.1",
-  "description": "Website builder skill for vibe coding: build, check and publish a simple website without knowing how to code. Plain-language build, a 0-100 ready-to-publish score, hosted forms and payments, and click-by-click publishing steps.",
-  "author": { "name": "mr-Imran", "url": "https://github.com/mr-Imran" },
+  "version": "0.2.0",
+  "description": "Website and web app builder skill for vibe coding: build, check and publish a simple website or a full app with sign-in, roles and a database, without knowing how to code. A 0-100 ready-to-publish check, a tested app starter with no packages, and click-by-click publishing steps.",
+  "author": {
+    "name": "mr-Imran",
+    "url": "https://github.com/mr-Imran"
+  },
   "homepage": "https://github.com/mr-Imran/vibe-coding-website-builder",
   "repository": "https://github.com/mr-Imran/vibe-coding-website-builder",
   "license": "MIT",
-  "keywords": ["agent-skills", "claude-skills", "claude-code", "vibe-coding", "website-builder", "ai-website-builder", "no-code", "landing-page", "static-site", "beginners"]
+  "keywords": [
+    "agent-skills",
+    "claude-skills",
+    "claude-code",
+    "vibe-coding",
+    "website-builder",
+    "ai-website-builder",
+    "web-app",
+    "full-stack",
+    "no-code",
+    "landing-page",
+    "static-site",
+    "beginners"
+  ]
 }

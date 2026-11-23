@@ -269,6 +269,32 @@ class SiteCheckTests(unittest.TestCase):
         self.assertEqual(rep["verdict"], "cannot tell yet")
         self.assertEqual(self.status(rep, "works.links"), "skip")
 
+    def test_app_with_a_server_is_checked_through_its_public_folder(self):
+        make_site(os.path.join(self.dir, "public"), index=GOOD_PAGE.format(
+            title="Home - Studio", h1="Home", body="").replace('<meta property="og:title" content="Sugar and Thyme">\n', "")
+            .replace('<meta property="og:image" content="images/share.jpg">\n', "").replace('href="style.css"', 'href="/style.css"'))
+        with open(os.path.join(self.dir, "server.js"), "w", encoding="utf-8") as fh:
+            fh.write("// if (role === 'admin') { /* server code is not a page */ }\n")
+        os.makedirs(os.path.join(self.dir, "data"))
+        rep = check(self.dir)
+        self.assertEqual(rep["kind"], "app")
+        self.assertEqual(rep["folder_checked"], "public")
+        self.assertEqual(self.status(rep, "share.og"), "skip")
+        self.assertEqual(self.status(rep, "works.links"), "pass")
+        self.assertTrue(any("data" in n and "must not be uploaded" in n for n in rep["notes"]))
+        self.assertFalse(any("start with a slash" in n for n in rep["notes"]))
+        self.assertEqual(rep["verdict"], "ready")
+
+    def test_secret_in_an_app_s_server_code_still_stops_publishing(self):
+        make_site(os.path.join(self.dir, "public"))
+        key = "sk_" + "live_" + "51Abcdefghijklmnopqrstuvwx"
+        with open(os.path.join(self.dir, "server.js"), "w", encoding="utf-8") as fh:
+            fh.write("const stripeKey = '%s';\n" % key)
+        rep = check(self.dir)
+        self.assertEqual(rep["kind"], "app")
+        self.assertEqual(self.status(rep, "safe.secrets"), "fail")
+        self.assertEqual(rep["verdict"], "do not publish")
+
     def test_empty_folder(self):
         rep = check(self.dir)
         self.assertEqual(rep["kind"], "empty")

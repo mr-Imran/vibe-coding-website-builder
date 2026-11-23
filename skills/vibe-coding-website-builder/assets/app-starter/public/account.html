@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your account - My app</title>
+  <meta name="description" content="Change the password for your My app account.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="bar">
+    <a class="brand" href="/">My app</a>
+    <nav aria-label="Main" id="nav"></nav>
+    <div class="who">
+      <span id="who-name"></span>
+      <button type="button" class="button quiet" id="sign-out">Sign out</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1>Your account</h1>
+    <p id="who-email"></p>
+
+    <h2>Change your password</h2>
+    <form id="password-form" class="narrow-form" novalidate>
+      <div class="field">
+        <label for="current">Current password</label>
+        <input id="current" name="current" type="password" autocomplete="current-password" required>
+        <p class="field-error" data-for="current"></p>
+      </div>
+      <div class="field">
+        <label for="next">New password</label>
+        <input id="next" name="next" type="password" autocomplete="new-password" required aria-describedby="next-hint">
+        <p class="hint" id="next-hint">At least 8 characters. Your other devices will be signed out.</p>
+        <p class="field-error" data-for="next"></p>
+      </div>
+      <p class="form-error" role="alert"></p>
+      <button type="submit" class="button" id="save-password" data-busy="Saving…">Change password</button>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+
+  <script type="module" src="/js/account.js"></script>
+</body>
+</html>

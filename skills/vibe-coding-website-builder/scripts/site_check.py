@@ -513,8 +513,14 @@ def fixed_widths(css):
 # ------------------------------------------------------------- finding the site
 
 def find_site(folder):
-    """Return (site_root, kind, note). kind: plain, built, needs-build, empty."""
+    """Return (site_root, kind, note). kind: plain, app, built, needs-build, empty."""
     lister_names = os.listdir(folder) if os.path.isdir(folder) else []
+    # An app: a program (server.js) that serves its pages from public/.
+    if "server.js" in lister_names and os.path.isfile(os.path.join(folder, "public", "index.html")):
+        return (os.path.join(folder, "public"), "app",
+                "This is an app: a program that serves the pages in its 'public' folder. Checked those pages. "
+                "The check reads pages; it does not test sign-in, the database or the rules. The app's own "
+                "tests do that (node --test).")
     has_pkg, build_script, pkg_text = False, False, ""
     if "package.json" in lister_names:
         has_pkg = True
@@ -571,7 +577,7 @@ class Audit:
             self.notes.append(self.kind_note)
         self.files = list(walk(self.root))
         self.pages = {}
-        if self.kind in ("plain", "built"):
+        if self.kind in ("plain", "built", "app"):
             for rel in self.files:
                 if rel.lower().endswith((".html", ".htm")):
                     self.pages[rel] = parse_page(os.path.join(self.root, rel), rel)
@@ -706,7 +712,7 @@ class Audit:
                     secrets.append(where.replace("  AIza", "  Google AI (Gemini) key  AIza"))
                 else:
                     google.append(where)
-            if is_code and (in_site or self.kind != "plain"):
+            if is_code and (in_site or self.kind in ("built", "needs-build")):
                 for m in FAKE_LOGIN_RE.finditer(text):
                     snippet = clip(m.group(0), 60)
                     if re.search(r"[\"'`](?:password|text|submit|hidden|email|string|undefined|object)[\"'`]", snippet, re.I):
@@ -755,6 +761,14 @@ class Audit:
         if os.path.isdir(os.path.join(self.root, ".git")) and self.kind == "plain":
             self.notes.append("The folder has a hidden .git folder (the project's saved history). It is not needed "
                               "online. If the site is published by dragging the folder to a host, leave it out.")
+        if self.kind == "app":
+            if os.path.isdir(os.path.join(self.project, "data")):
+                self.notes.append("The 'data' folder holds this computer's copy of the database, which may include "
+                                  "test accounts. It must not be uploaded with the app.")
+            env_files = [n for n in os.listdir(self.project) if n.lower().startswith(".env") and n.lower() not in PRIVATE_FILE_OK]
+            if env_files:
+                self.notes.append("Settings file(s) %s are in the project folder. They must not be uploaded or "
+                                  "committed; on the host, type the settings into its variables screen." % ", ".join(env_files))
         if os.path.isdir(os.path.join(self.root, "node_modules")):
             self.notes.append("The folder that goes online contains node_modules (thousands of tool files). Do not upload it.")
 
@@ -867,7 +881,7 @@ class Audit:
         self.set("works.anchors", not anchors, anchors[:10])
         self.set("works.local", not local, local[:10],
                  "These only exist on the computer the site was made on. Visitors will see nothing there." if local else "")
-        if rooted:
+        if rooted and self.kind != "app":
             self.notes.append("%d address%s start with a slash (like /images/photo.jpg). They work on most hosts, "
                               "but not when the page is opened by double-clicking the file, and not when the site "
                               "lives in a sub-folder of an address. Addresses without the leading slash work everywhere."
@@ -1122,6 +1136,11 @@ class Audit:
         if home is None:
             for cid in ("share.description", "share.og"):
                 self.skip(cid, "no index.html to look at")
+        elif self.kind == "app":
+            # An app's first page sits behind sign-in: nobody finds it in a
+            # search or shares it for its preview picture.
+            self.skip("share.description", "the first page of an app is behind sign-in")
+            self.skip("share.og", "the first page of an app is behind sign-in")
         else:
             desc = (home.meta("description") or "").strip()
             self.set("share.description", len(desc) >= 30, detail="" if len(desc) >= 30 else (
@@ -1290,7 +1309,8 @@ def render(rep, summary=False):
     folder = "" if rep["folder_checked"] == "." else "   (folder checked: %s/)" % rep["folder_checked"]
     out.append("site check: %s%s" % (rep["site"], folder))
     out.append("")
-    out.append("Score: %d/100    Verdict: %s" % (rep["score"], rep["verdict"].upper()))
+    scope_note = "  (the pages only)" if rep["kind"] == "app" else ""
+    out.append("Score: %d/100    Verdict: %s%s" % (rep["score"], rep["verdict"].upper(), scope_note))
     scope = "%d of %d points" % (rep["earned"], rep["possible"])
     if rep["possible"] < 100:
         skipped = [c["title"] for c in rep["checks"] if c["status"] == "skip"]

@@ -1,8 +1,8 @@
 # Contributing
 
-Thanks for looking. The skill is small on purpose: one `SKILL.md`, four
-reference files, a page skeleton and one Python script that uses only the
-standard library.
+Thanks for looking. The skill has two halves. For simple sites: guides, a
+page skeleton and one Python script that uses only the standard library. For
+apps: guides and a starter kit, which is one Node.js program with no packages.
 
 ## Layout
 
@@ -12,6 +12,7 @@ skills/vibe-coding-website-builder/
   references/     guides loaded only when a step needs them
   scripts/        site_check.py
   assets/         page-skeleton.html
+                  app-starter/   the starting point for every app (see below)
   evals/          test cases: a prompt, input files and graders for each
 tests/            unit tests for site_check.py
 docs/             the landing page, served by GitHub Pages; plain HTML and CSS
@@ -35,6 +36,30 @@ python3 -m unittest discover tests
 ```
 
 Keep the script free of third-party imports and working on Python 3.8.
+
+## The app starter
+
+`skills/vibe-coding-website-builder/assets/app-starter/` is copied into every
+app the skill builds, so a mistake in it is a mistake in all of them.
+
+```sh
+cd skills/vibe-coding-website-builder/assets/app-starter
+node --test                 # every test must pass
+node tools/rubric.js        # the tests, counted against M01 to A08
+```
+
+- It needs Node.js 22.13 or newer and has no dependencies. Keep it that way:
+  no `npm install`, no build step.
+- `core/` holds the parts that are easy to get wrong (sign-in, sessions,
+  access rules, transactions, retries). Every helper there has a test named
+  `core <id> ...` for the requirement it serves. A change to a helper comes
+  with a change to its test, and a new helper comes with a new one.
+- Comments in `core/` say why the code is the way it is, for an agent that
+  will build on it. Keep them accurate when the code changes.
+- Do not add an example module. Apps are built from the guides; an example
+  left in the starter ends up in every app.
+- After changing the starter, re-read `references/app.md` and
+  `references/app-advanced.md`: they name its files and functions.
 
 ## Changing the check
 

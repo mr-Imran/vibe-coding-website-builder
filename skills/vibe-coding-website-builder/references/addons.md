@@ -71,7 +71,7 @@ working. Say that plainly.
 A password that is checked by code inside the page protects nothing: the page
 and the password are both sent to every visitor. There is no safe way to
 password-protect part of a simple site from within its own files. Some hosts
-offer it as a paid feature; otherwise see section 9.
+offer it as a paid feature; otherwise it needs an app (section 9).
 
 ## 3. Getting in touch
 
@@ -226,17 +226,24 @@ banner.
 
 ## 9. What a simple site cannot do
 
-Say so early and plainly when the request includes one of these. Each needs a
-server, a database and someone who can keep them secure, and an owner who
-cannot read the code cannot tell whether that was done.
+A simple site has no program running behind it, so it cannot keep accounts,
+remember each person's data or enforce rules. When the request includes one
+of these, there are two honest answers: a hosted service behind a link, or an
+app (`references/app.md`). Say which you recommend and why, in one or two
+sentences, and let the owner choose.
 
-| They ask for | Say | Offer |
+| They ask for | A hosted service behind a link | An app |
 |---|---|---|
-| Log-in, member areas, user accounts | It needs a real back end; a pretend one in the page keeps nobody out. | A membership or course platform that has log-in built in, linked from the site. |
-| A shop with a basket, stock and shipping | That is a shop system. | A hosted shop (Shopify, Square Online, Etsy, Big Cartel) linked from the site; or payment links for a handful of products. |
-| A chatbot or anything that calls an AI service | The key cannot be in the page, so it needs a server. | The chat widget of a hosted product that keeps the key on its side. |
-| People uploading files, posting comments, leaving reviews | Needs storage and moderation. | A form for sending files by email; reviews on Google or another platform, linked. |
-| A blog they update themselves several times a week | Editing HTML by chat for every post gets tiring. | Fine for occasional posts through the agent; for frequent ones, a hosted blog or newsletter linked from the site. |
+| Log-in, member areas, user accounts | A membership or course platform that has log-in built in. Right when the content is the product. | Right when the accounts are part of how the business runs (members, staff, bookings). A pretend log-in inside a page is never right: it keeps nobody out. |
+| A shop with a basket, stock and shipping | A hosted shop (Shopify, Square Online, Etsy, Big Cartel), or payment links for a handful of products. Usually the better answer: shops are a solved problem. | Only when the shop has rules no shop system offers. Card payments still go through the payment company's hosted page. |
+| Bookings, orders or stock the business must track itself | A booking service, when one fits. | The typical case for an app. |
+| A chatbot or anything that calls an AI service | The chat widget of a hosted product that keeps the key on its side. | Possible, since an app's server can hold the key; the owner pays the AI service per use. |
+| People uploading files, posting comments, leaving reviews | A form for sending files by email; reviews on Google or another platform, linked. | Needs storage and someone to moderate. Ask who will. |
+| A blog they update themselves several times a week | A hosted blog or newsletter, linked from the site. | Not worth an app. |
 
-Then build the simple site around the link. Most owners are better served by
-that than by a home-made version of the complex thing.
+The hosted service is cheaper to run (often free), needs no program on a
+host, and somebody else keeps it secure. The app fits the business exactly,
+costs a few dollars a month to host, and puts other people's data in the
+owner's care. Most owners who only need one of the rows above are better
+served by the link; owners whose business *is* the rules are better served by
+the app.

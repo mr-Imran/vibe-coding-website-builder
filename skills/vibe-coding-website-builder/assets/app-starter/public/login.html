@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in - My app</title>
+  <meta name="description" content="Sign in to My app, or create an account.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body class="centered">
+  <main id="main" class="card">
+    <h1 id="title">Sign in</h1>
+    <form id="auth-form" novalidate>
+      <div class="field" id="name-field" hidden>
+        <label for="name">Your name</label>
+        <input id="name" name="name" autocomplete="name" maxlength="80">
+        <p class="field-error" data-for="name"></p>
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" required>
+        <p class="field-error" data-for="email"></p>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="password-hint">
+        <p class="hint" id="password-hint" hidden>At least 8 characters.</p>
+        <p class="field-error" data-for="password"></p>
+      </div>
+      <p class="form-error" role="alert"></p>
+      <button type="submit" class="button" id="submit" data-busy="Signing in…">Sign in</button>
+    </form>
+    <p class="switch"><button type="button" class="link" id="switch">Create an account</button></p>
+  </main>
+  <script type="module" src="/js/login.js"></script>
+</body>
+</html>

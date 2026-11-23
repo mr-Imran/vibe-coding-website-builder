@@ -1,36 +1,45 @@
 ---
 name: vibe-coding-website-builder
 description: >-
-  Build, check and publish a simple website for someone who cannot code. Turns
-  a plain-language idea into a working site (landing page, portfolio, small
-  business, event, link page) with no build step, connects contact forms,
-  chat links, payments and bookings through hosted services, scores any site
-  from 0 to 100 on whether it is ready to publish (leaked keys, links that
-  break online, phone layout, placeholder text, forms that send nothing), and
-  walks the person through putting it online click by click. Use this whenever
-  someone asks for a website, landing page or portfolio and gives any sign
-  they are not a programmer ("I don't know coding", "I'm not technical", "I
-  made this with AI", vibe coding), asks whether an AI-built site is safe or
-  ready to publish, asks how to get a site online, connect a domain or be
-  found on Google, or wants a form, payment button or booking added to a
-  simple site, even if they never say "vibe".
+  Build, check and publish a website or a full web app for someone who cannot
+  code. Builds a simple site (landing page, portfolio, small business) from
+  plain files, or a complete app with sign-in, roles, a database and tested
+  business rules as one self-contained Node program, covering real-time sync,
+  offline use, concurrency, access control, outside APIs, workflows, data
+  import and analytics, each with its test and a report against the
+  requirement list. Scores any site 0-100 on whether it is ready to publish
+  and walks the person through putting it online. Use this whenever someone
+  asks for a website, landing page, web app, booking or ordering system,
+  dashboard or portal and seems not to be a programmer ("I don't know
+  coding", "I made this with AI", vibe coding); hands over a requirement list
+  or marking scheme for a web project; asks whether an AI-built site or app is
+  safe to publish, how to get it online or be found on Google; or wants a
+  form, payment or booking added, even if they never say "vibe".
 license: MIT
 compatibility: >-
   The bundled check needs Python 3.8+ (standard library only). Without Python,
   references/checklist.md lists the same checks to do by reading the files.
+  Apps need Node.js 22.13 or newer on the person's computer and nothing else.
 metadata:
-  version: "0.1.1"
+  version: "0.2.0"
 ---
 
 # Vibe Coding Website Builder
 
-The person you are working for wants a website and cannot read code. They will
-judge the result by what they see in the browser, they will publish whatever
-you hand them, and they have no way to notice what is wrong underneath: a
-secret key in the page, a picture that will vanish once the site is online, a
-review you made up to fill a gap, a form that says "Thank you" and sends
-nothing. So you carry the whole technical side, and you tell them the truth
-about what is finished and what is not, in words they can act on.
+The person you are working for wants a website or a web app and cannot read
+code. They will judge the result by what they see in the browser, they will
+publish whatever you hand them, and they have no way to notice what is wrong
+underneath: a secret key in the page, a picture that will vanish once the site
+is online, a review you made up to fill a gap, a form that says "Thank you"
+and sends nothing, a booking screen that gives the last seat to two people.
+So you carry the whole technical side, and you tell them the truth about what
+is finished and what is not, in words they can act on.
+
+There are two kinds of project. A **simple site** shows things and lets
+visitors get in touch; it is a folder of plain files. An **app** has people
+signing in and data of their own; it is a small program with a database. The
+workflow below is for a site. "When they need an app" further down says how
+to tell them apart and what changes.
 
 Two kinds of path appear below. `scripts/...`, `references/...` and
 `assets/...` are in this skill's folder (the one that contains this file), so
@@ -53,8 +62,10 @@ language they write in. Do not show them code unless they ask to see it.
 **Fewest moving parts.** Plain HTML and CSS, a little JavaScript where the
 page has to react, no build step, nothing to install. The owner cannot repair
 a broken toolchain, and every tool is one more thing that stops working in a
-year. The site opens by double-clicking `index.html`. If you are asked to work
-on a project that already uses a framework, work inside it; do not rewrite it.
+year. The site opens by double-clicking `index.html`. An app follows the same
+rule one size up: a single Node program with its database in one file and no
+packages, started with one command. If you are asked to work on a project that
+already uses a framework, work inside it; do not rewrite it.
 
 **Only true content.** Never invent a review, a customer name, a star rating,
 a "trusted by", a price, an opening hour, an address, a phone number, a team
@@ -67,8 +78,10 @@ put a yellow note in its place (step 2).
 visitor, so a key or password in it is public however it is hidden. The owner
 cannot tell a safe key from a dangerous one; you must. Anything that needs a
 secret (taking payments, sending email, calling an AI service) is done by a
-hosted service that keeps the secret on its side. If you find a secret in an
-existing site, that comes before everything else in your report.
+hosted service that keeps the secret on its side, or by an app's server, which
+reads it from the host's settings and never from a file in the project. If you
+find a secret in an existing site, that comes before everything else in your
+report.
 
 **Their accounts, their clicks.** Edit files in the project folder freely.
 Creating accounts, publishing, buying an address and paying for anything are
@@ -104,10 +117,12 @@ page they can see than to a questionnaire. Otherwise ask once, in one message,
 only for what is missing, with an example answer for each question. If they
 cannot be reached for answers, build with what you have.
 
-Check the scope now. Log-in, a shop with a basket, a chatbot, or visitors
-uploading things are more than a simple site can safely do. Say so in a
-sentence and offer the hosted alternative (`references/addons.md`, last
-section), then build the simple site around it.
+Check the scope now. If people will sign in, keep data of their own, or
+compete for things that run out, this is an app: go to "When they need an
+app". If one hosted service behind a link would do the job (a payment link, a
+booking page, a hosted shop), a simple site with that link is cheaper to run
+and has less that can go wrong; say so in a sentence and let them choose
+(`references/addons.md`, last section).
 
 ### 2. Build
 
@@ -222,6 +237,60 @@ Once it is online, the last section of `references/publish.md` covers being
 found in search: the few things worth adding to a simple site, and how to run
 a full audit with the Claude SEO plugin when it is installed.
 
+## When they need an app
+
+Signs: accounts and sign-in, each person's own records, staff and customers
+seeing different things, bookings or orders or stock that the system keeps
+track of, or a list of requirements that names a database, roles or
+workflows.
+
+Read `references/app.md` before anything else. In short:
+
+1. **Plan it in plain words first**: the kinds of user, three or more parts
+   that depend on each other, one journey that crosses them, and the rules of
+   the business as sentences. Rules you had to assume are written down as
+   assumed and confirmed with the owner.
+2. **Copy the starter** from `assets/app-starter/` into the project folder.
+   It is one Node program with sign-in, roles, sessions, the database and the
+   safety helpers already written and tested. Run its tests before adding
+   anything.
+3. **Build the app's own parts as modules** on those helpers, each with its
+   tables, its rules and its tests.
+4. **Prove it.** Every app meets the eight mandatory requirements, M01 to
+   M08. The advanced ones, A01 to A08, are built when the person asks for them
+   or the app needs them (`references/app-advanced.md`). A requirement counts
+   as met when one of the app's own tests, named with its id, passes;
+   `node tools/rubric.js --write` in the project folder prints the table.
+5. **Run the page check** on the project folder as for a site; it reads the
+   app's `public/` folder.
+6. **Hand over** with the requirement table, the rules you assumed, how to
+   start the app and sign in, and what it costs to keep online. Putting an app
+   online is in `references/app-publish.md`: it needs a host that keeps a
+   program running and a permanent place for the database, which usually
+   costs a few dollars a month.
+
+| | Mandatory, every app | | Advanced, on request |
+|---|---|---|---|
+| M01 | Complete system: 3 connected modules, end-to-end | A01 | Real-time sync |
+| M02 | Database: CRUD, persistence, relationships | A02 | Decisions and optimization |
+| M03 | Sign-in, roles, session protection | A03 | Access control per record |
+| M04 | Business rules, multi-condition workflows | A04 | Offline-first |
+| M05 | Search, filter, sort, calculations | A05 | Concurrency and transactions |
+| M06 | Validation, duplicate actions, failure recovery | A06 | Outside API, fault tolerance |
+| M07 | Responsive and accessible pages | A07 | Multi-step workflow |
+| M08 | Live deployment and documentation | A08 | Data processing and analytics |
+
+A03 and A05 are not optional when they apply: private records need the access
+rules, and anything that can run out needs the transaction.
+
+The ground rules hold unchanged. Plain words: the owner hears "the app makes
+sure two people cannot get the same seat", not "transactions". Only true
+content: example data is labelled as example data. Their accounts, their
+clicks: they create the hosting account and choose the administrator
+password where you never see it. And one more for apps: do not call an app
+secure. Say what was tested, and that an app holding other people's data
+deserves a look by someone who reads code before it holds anything sensitive.
+
 ## Checking a site that already exists
 
 For "is my site ok?", "check this before I publish", "I made this with AI".
@@ -287,6 +356,10 @@ People often want one piece. Do that piece well and skip the rest.
 | The request | Do | Read |
 |---|---|---|
 | "Make me a website for..." | Steps 1 to 5; step 6 when they are ready | build, addons if needed |
+| "Make me an app / a system for..." | "When they need an app" | app; app-advanced for each advanced item |
+| A list of requirements or a marking scheme | Map each item to M01-M08 and A01-A08, build, report with the table | app, app-advanced |
+| "Put my app online" | The tests and the check first, then the host steps | app-publish |
+| "Add real-time / offline / an import / ... to my app" | That one advanced item, with its test | app-advanced, that section |
 | "Is this ready?" / "check my site" | The check, nothing changed | addons section 2, only if a key or password turns up |
 | "Fix what's wrong with it" | The check, fixes in place, before and after | build; addons for forms and keys |
 | "How do I put it online?" | The check first, then step 6 | publish |
@@ -304,10 +377,18 @@ site has to be published again for visitors to see it if it is already online.
 |---|---|
 | `scripts/site_check.py [folder] [--summary] [--json] [--min N]` | Scores a site folder from 0 to 100 and lists what to fix, most important first. Reads files only: runs nothing, sends nothing, changes nothing. `--summary` prints the score and area totals; `--min N` exits 1 below N. |
 
+The app starter has its own tools, run with Node from the project folder:
+`node --test` runs every test, and `node tools/rubric.js --write` reports them
+against M01 to A08.
+
 ## References
 
 - `references/build.md`: the folder, page content, yellow notes, the look, the technical baseline, pictures, legal basics, looking at the result.
 - `references/addons.md`: what may and may not be in a page, chat links, forms, payments, bookings, newsletter, map, visitor statistics, and what a simple site cannot do.
 - `references/publish.md`: choosing a host, click-by-click steps, checks after publishing, changing the site later, the owner's own address, being found in search and a full audit with Claude SEO.
 - `references/checklist.md`: the same checks as the script, for doing by hand when there is no Python.
+- `references/app.md`: site or app, planning, the starter and its helpers, building a module, the pages, the eight mandatory requirements and their tests, the documents an app carries.
+- `references/app-advanced.md`: A01 to A08, each with what it means, what to build with, what the screen must do, and its test.
+- `references/app-publish.md`: hosting an app, the steps, checks after publishing, backups and the owner's duties.
+- `assets/app-starter/`: the starting point for every app. One Node program, no packages, with tests.
 - `assets/page-skeleton.html`: the starting point for every page, with the lines the check looks for and the yellow-note styles.
