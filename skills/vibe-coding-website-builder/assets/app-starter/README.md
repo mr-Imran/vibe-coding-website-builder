@@ -6,21 +6,24 @@ REPLACE: three sentences. What this app is, who uses it, and what they get done 
 
 You need Node.js 22.13 or newer (nodejs.org, the LTS installer). Nothing else is installed.
 
-```sh
-node server.js
-```
+| | Windows: double-click | Any system: in a terminal opened in this folder |
+|---|---|---|
+| Create an account (do this first) | `add-account.cmd` | `node tools/add-user.js` |
+| Start the app | `start-app.cmd` | `node server.js` |
+| Load made-up example data, once | `load-example-data.cmd` | `node tools/seed.js` |
 
-Then open http://localhost:3000. The first time, start it with an administrator
-account to create:
+Creating an account asks for an email, a name and a role. Press Enter at the
+password question and one is made up and shown once; write it down, then
+change it under **Your account** after signing in.
 
-```sh
-ADMIN_EMAIL=you@your-address ADMIN_PASSWORD="a long password you choose" node server.js
-```
+When the app has started it prints its address, normally http://localhost:3000.
+Open that in a browser. Leave the window open while you use the app; close it
+(or press Ctrl+C) to stop the app.
 
 ## Who can do what
 
 REPLACE: one line per role. What each kind of user can see and do, and how to
-get an account for each (who creates it, or the seed command). No passwords here.
+get an account for each (who creates it, or the example data above). No passwords here.
 
 ## How it is built
 

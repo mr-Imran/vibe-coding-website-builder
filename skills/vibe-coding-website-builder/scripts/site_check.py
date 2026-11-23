@@ -622,12 +622,30 @@ class Audit:
             rel = (os.path.dirname(page_rel) + "/" + path) if os.path.dirname(page_rel) else path
         return "file", rel, parts.fragment
 
+    def resolve_ref(self, rel):
+        """Find the file a local address leads to. Returns (status, real_rel).
+
+        An app answers some addresses that are not files: /book is served from
+        book.html, and everything under /api/ comes from the program's routes,
+        which this check does not read.
+        """
+        status, real = self.lister.resolve(self.root, rel)
+        if status == "missing" and self.kind == "app":
+            clean = rel.strip("/")
+            if clean == "api" or clean.startswith("api/"):
+                return "ok", rel
+            if clean and "." not in clean.rsplit("/", 1)[-1]:
+                alt_status, alt_real = self.lister.resolve(self.root, clean + ".html")
+                if alt_status != "missing":
+                    return alt_status, alt_real
+        return status, real
+
     def check_file(self, base_rel, url):
         """For a local reference, return None when fine or a text describing the problem."""
         kind, rel, frag = self.target(base_rel, url)
         if kind != "file":
             return None
-        status, real = self.lister.resolve(self.root, rel)
+        status, real = self.resolve_ref(rel)
         if status == "ok":
             return None
         if status == "case":
@@ -845,7 +863,7 @@ class Audit:
                         if problem:
                             broken.append("%s:%d  %s" % (rel, line, problem))
                         elif frag:
-                            status, real = self.lister.resolve(self.root, val)
+                            status, real = self.resolve_ref(val)
                             other = self.pages.get(real)
                             if other is not None and frag not in other.ids:
                                 anchors.append("%s:%d  %s  (nothing on that page is marked \"%s\")" % (rel, line, url, frag))

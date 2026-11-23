@@ -56,6 +56,30 @@ export function createAuth({ db, config }) {
   const cookieName = config.secureCookies ? '__Host-sid' : 'sid';
   let dummyHash = null;
 
+  // Let a module react when an account is created or changed:
+  //
+  //   auth.on('user.created', (user) => db.prepare('INSERT INTO profiles (user_id) VALUES (?)').run(user.id));
+  //   auth.on('user.changed', (user, before) => { if (before.active && !user.active) freeTheirBookings(user.id); });
+  //
+  // user and before are { id, email, name, role, active }. A listener runs
+  // inside the same transaction as the change, so the account and what the
+  // listener writes are saved together or not at all: if it throws, the
+  // account is not created or changed. It must not be async.
+  // 'user.created' fires for every new account: sign-up, the People screen,
+  // the first administrator, tools/add-user.js and tools/seed.js.
+  const listeners = { 'user.created': [], 'user.changed': [] };
+  function on(event, fn) {
+    if (!listeners[event]) throw new Error(`auth.on: there is no event "${event}". The events are: ${Object.keys(listeners).join(', ')}.`);
+    listeners[event].push(fn);
+  }
+  function emit(event, ...args) {
+    for (const fn of listeners[event]) {
+      const result = fn(...args);
+      if (result && typeof result.then === 'function') throw new Error(`auth.on('${event}'): the listener is async. It runs inside a transaction and must finish at once.`);
+    }
+  }
+  const snapshot = (u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, active: u.active ? 1 : 0 });
+
   function cookie(token, maxAgeSeconds) {
     const parts = [`${cookieName}=${token}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAgeSeconds}`];
     if (config.secureCookies) parts.push('Secure');
@@ -107,11 +131,15 @@ export function createAuth({ db, config }) {
     if (!config.roles.includes(role)) throw new Error(`Unknown role: ${role}`);
     const hash = await hashPassword(password);
     try {
-      const info = db.prepare('INSERT INTO users (email, name, password_hash, role, active, created_at) VALUES (?, ?, ?, ?, 1, ?)')
-        .run(email.toLowerCase(), name, hash, role, now());
-      return Number(info.lastInsertRowid);
+      return tx(db, () => {
+        const info = db.prepare('INSERT INTO users (email, name, password_hash, role, active, created_at) VALUES (?, ?, ?, ?, 1, ?)')
+          .run(email.toLowerCase(), name, hash, role, now());
+        const id = Number(info.lastInsertRowid);
+        emit('user.created', { id, email: email.toLowerCase(), name, role, active: 1 });
+        return id;
+      });
     } catch (err) {
-      if (String(err.message).includes('UNIQUE')) throw invalid({ email: 'There is already an account with this email.' });
+      if (String(err.message).includes('UNIQUE') && String(err.message).includes('users.email')) throw invalid({ email: 'There is already an account with this email.' });
       throw err;
     }
   }
@@ -239,6 +267,7 @@ export function createAuth({ db, config }) {
         }
         db.prepare('UPDATE users SET role = ?, active = ? WHERE id = ?').run(role, active, id);
         if (!active || role !== target.role) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
+        emit('user.changed', snapshot({ ...target, role, active }), snapshot(target));
       });
       audit(db, { userId: ctx.user.id, action: 'user.changed', entity: 'user', entityId: id, detail: JSON.stringify(input), ip: ctx.ip });
     });
@@ -254,5 +283,5 @@ export function createAuth({ db, config }) {
     return true;
   }
 
-  return { loadSession, createUser, requireUser, requireRole, registerRoutes, bootstrapAdmin, cookieName };
+  return { loadSession, createUser, requireUser, requireRole, registerRoutes, bootstrapAdmin, cookieName, on };
 }

@@ -23,7 +23,10 @@ export function loadConfig(env = process.env, overrides = {}) {
     appName: 'My app',
     // Where the business is. Rules such as "has the 9 o'clock class started?"
     // are about the clock on the wall there, not on the host. See core/time.js.
-    timeZone: env.TIME_ZONE || 'UTC',
+    // Without a setting it is this computer's own zone, which is right on the
+    // owner's computer. A host usually runs on UTC, so set TIME_ZONE there
+    // (for example Europe/London).
+    timeZone: env.TIME_ZONE || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     // The current moment. Rules ask config.now() instead of new Date(), so a
     // test can set the clock to "five minutes before the deadline".
     now: () => new Date(),

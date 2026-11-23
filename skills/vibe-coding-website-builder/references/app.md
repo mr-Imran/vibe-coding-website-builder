@@ -51,7 +51,10 @@ One Node.js program, one database file, no packages to install.
 ├── modules/             the app's own parts: one file each, listed in index.js
 ├── public/              the pages, styles and page scripts
 ├── tests/               the proof: one test file per module, plus the core's
-├── tools/rubric.js      runs the tests and reports them against the requirements
+├── tools/               rubric.js (the tests, counted against the requirements),
+│                        add-user.js (make an account), seed.js (example data)
+├── start-app.cmd, add-account.cmd, load-example-data.cmd
+│                        the same three things by double-click, on Windows
 ├── data/                the database file (created when the app runs; never shared)
 ├── README.md            what it is and how to run it
 ├── RUBRIC.md            where each requirement is met and how to see it
@@ -113,16 +116,24 @@ project folder, including the files whose names start with a dot. Then:
    machine.
 2. Name the app: `appName` and the roles in `config.js`, the name in
    `package.json`, and "My app" in the pages under `public/`.
-3. Set the roles, most powerful first. The first one manages people. Set
-   `timeZone` to where the business is.
+3. Set the roles in `config.js`, most powerful first, and `defaultRole`. The
+   first one manages people. Nothing else needs renaming: the People screen
+   and its menu entry are written for `'top'`, which means "the first role,
+   whatever it is called", and the core's tests bring their own roles.
+4. Leave `timeZone` alone unless the business is somewhere other than the
+   owner's computer. It is that computer's own zone unless the `TIME_ZONE`
+   setting says otherwise. On a host it must be set (`app-publish.md`),
+   because hosts run on UTC.
 
 The starter already has these screens, which every app needs: sign in and
 create an account (`login.html`), a home page, "Your account" with a password
-change, and "People" for the highest role (add someone, change a role, switch
-an account off, set a new password for someone who is locked out). The menu
-on every signed-in page comes from `MENU` in `public/js/shell.js`; add the
-app's pages there, and start each page's script with `startPage()` from that
-file.
+change, and "People" for the first role (add someone, change a role, switch
+an account off, set a new password for someone who is locked out, download a
+backup). The menu on every signed-in page comes from `MENU` in
+`public/js/shell.js`; add the app's pages there, and start each page's script
+with `startPage()` from that file: `startPage()` for anyone signed in,
+`startPage(['staff', 'manager'])` for named roles, `startPage('top')` for the
+first role.
 
 What `core/` gives you, so that you do not write it again:
 
@@ -130,11 +141,12 @@ What `core/` gives you, so that you do not write it again:
 |---|---|
 | `db.js` | `tx(db, fn)` for all-or-nothing changes; `migrate`; `now()`; `ident()` |
 | `time.js` | `localParts()` and `zonedToUtc()` for rules about the clock on the wall where the business is |
-| `auth.js` | Sign-up, sign-in, sign-out, password change, managing people; the guards `auth.requireUser` and `auth.requireRole('admin')` |
-| `validate.js` | `check(body, schema)` for everything a person sends; `idParam()` |
+| `auth.js` | Sign-up, sign-in, sign-out, password change, managing people; the guards `auth.requireUser` and `auth.requireRole('admin')`; `auth.on('user.created' / 'user.changed', fn)` to react to accounts |
+| `validate.js` | `check(body, schema)` for everything a person sends, including lists (`type: 'list'`); `idParam()` |
 | `errors.js` | `notFound()`, `forbidden()`, `conflict()`, `invalid()`: answers a person can read |
 | `policy.js` | `guardRecord()` for "may this user touch this record"; `audit()` |
-| `records.js` | `listQuery()` for search, filter, sort, pages and totals; `updateVersioned()`; `takeOne()` |
+| `records.js` | `listQuery()` for search, filter, sort (one column or a named order over several), pages and totals; `updateVersioned()`; `takeOne()` |
+| `backup.js` | `GET /api/backup`: the first role downloads a copy of the whole database. Already registered and on the People screen |
 | `idempotency.js` | `once(ctx, work)` so a double click or a resend happens once |
 | `realtime.js` | Live updates to the people allowed to see them (A01) |
 | `external.js` | Calling outside services without hanging or crashing (A06) |
@@ -250,7 +262,24 @@ What that example does, and every route must do:
 - **Rules live in one place**, next to the data they guard, as named
   constants and short functions, so the test can name the rule it proves.
 - **A record fetched by id is guarded** with `guardRecord` before it is
-  shown or changed.
+  shown or changed, and before the request body is read or checked. Guard
+  first, then validate: the other way round, a malformed request aimed at
+  someone else's record is answered "your input is wrong" (which tells them
+  the record exists) and never reaches the audit log.
+- **Something that belongs to every account** (an approval, a profile, a
+  credit balance) gets its own table keyed by the user's id. Do not edit
+  `core/auth.js` to add columns. Create the row when the account is created:
+  `auth.on('user.created', (user) => db.prepare('INSERT INTO profiles (user_id) VALUES (?)').run(user.id))`,
+  in the module's `register`. It fires for every new account, however it was
+  made, in the same transaction. `auth.on('user.changed', (user, before) => ...)`
+  fires when a role changes or an account is switched off or on; use it when
+  that should have a consequence (their future bookings are released). When
+  nothing needs to happen, "no row means the default" is simpler still.
+- **A list inside a form** (the days a class runs, several tags) is
+  `{ type: 'list', of: { type: 'int', min: 0, max: 6 }, unique: true }` in the
+  schema. It arrives as an array; store it as its own table when the app
+  searches by it, or as `JSON.stringify(value)` in a text column when it is
+  only shown.
 - **Times are stored in UTC** (`now()`), money in whole cents. Format for
   people in the page. A rule about a time of day ("has the 9 o'clock class
   started?", "no bookings after 6 pm the day before") is about the clock
@@ -263,6 +292,11 @@ What that example does, and every route must do:
   title) is a view: create it in a migration and give its name to
   `listQuery()`. Pass `sums: { total: 'price_cents' }` for a total over
   everything that matches the search and filters, not just the page shown.
+  The view needs a column called `id` (rows that tie are ordered by it), or
+  pass `tiebreak: 'some_unique_column'`. For an order over several columns
+  ("by day, then start time, then room"), name it:
+  `sorts: { timetable: ['day', 'starts_at', 'room'] }`, asked for with
+  `?sort=timetable`.
 - **Messages are written for the person**, saying what happened and what they
   can do: "Sorry, the last place has just been taken", not "409".
 
@@ -272,13 +306,19 @@ Follow `references/build.md` for the look, phone layout and accessibility:
 an app's screens are still web pages. What differs:
 
 - Addresses start with a slash (`/app.css`, `/js/classes.js`), because pages
-  are served by the app. The check has a note about this; for an app it does
-  not apply.
-- **No script written inside a page.** The app sends a security policy that
-  only runs script files from `public/js/`. Each page ends with
-  `<script type="module" src="/js/that-page.js"></script>`. This is what stops
-  text typed by one user from running as code in another user's browser, so
-  do not loosen it.
+  are served by the app. Link to a page without its ending (`/book`, not
+  `/book.html`); the app serves `book.html` for it, and the page check knows
+  that for an app.
+- **No script and no style written inside a page.** The app sends a security
+  policy that only runs script files from `public/js/` and only applies
+  styles from its own stylesheets. Each page ends with
+  `<script type="module" src="/js/that-page.js"></script>`. A `<style>`
+  block or a `style="..."` attribute is ignored without any error, so a page
+  can look right in your head and wrong in the browser: put it in `app.css`
+  as a class. For a value only known when the page runs (a bar's width),
+  pass an object: `el('div', { class: 'bar', style: { width: '40%' } })`.
+  This policy is what stops text typed by one user from running as code in
+  another user's browser, so do not loosen it.
 - **Build what is shown with `el()`** from `js/api.js`, or `textContent`.
   Never join strings into HTML when any part came from a person or the
   database.
@@ -289,10 +329,23 @@ an app's screens are still web pages. What differs:
 - **Every form** shows the server's field messages next to the fields
   (`showFieldErrors`), keeps what the person typed, and cannot be sent twice
   (`withBusy`).
+- **Every action says what happened**, with `announce('Booked.')` or
+  `announce('That slot has just been taken.', 'error')`. The message appears
+  at the bottom of the window wherever the person has scrolled to, and is
+  read out by screen readers. Each signed-in page needs
+  `<p id="status" role="status" aria-live="polite"></p>` for it. Do not use
+  the browser's own `alert`, `confirm` or `prompt` boxes: ask in the page
+  (the People screen's "set a new password" dialog is the pattern).
 - **Every list** of more than a handful has search, at least one filter, a
   way to sort, and pages; and shows a calculated figure where one makes sense
   (a total, a count, what is left).
-- Pages for one role send others away with `requireSession(['admin'])`. That
+- **Every table works on a phone.** Give it `class="stack"`, make the first
+  cell of each row a `<th scope="row">`, and give every other cell
+  `data-label="Column name"`: on a narrow screen each row becomes a card
+  with the column names beside the values. The People screen shows how. A
+  table left to scroll sideways hides its right-hand columns, which is where
+  the buttons usually are.
+- Pages for some roles send others away with `startPage(['staff'])`. That
   is for comfort only; the route is what protects the data.
 - Yellow notes still apply to anything only the owner knows (their real
   class times, their prices).
@@ -317,13 +370,45 @@ test('M04 a member with three open bookings cannot book a fourth', async () => {
 | **M04** Complex business logic | The rules from section 3 are enforced on the server, including ones with several conditions at once | One test per rule: the case that is allowed, the case that is refused, and the edge between them (exactly at the limit, exactly at the deadline) |
 | **M05** Search, filter, sort, calculations | Lists use `listQuery`; totals and counts are calculated by the database over everything that matches, not just the page shown | Search finds the right rows, each filter narrows, each sort orders, pages add up, and a calculated figure matches a hand count |
 | **M06** Errors and edge cases | Bad input is refused field by field; a repeated action happens once; a failure part-way leaves nothing half done; the page says what went wrong | For the main form: empty, too long, wrong type, impossible values; the same request sent twice with one key makes one record; an action that fails in its second step leaves the first step undone |
-| **M07** Responsive UI and accessibility | The pages pass the page check, work at phone width, and can be used with a keyboard alone | A test like the core's M07 test, run over the app's own pages (viewport, language, one main heading, a label for every field); and the page check's score in the report |
+| **M07** Responsive UI and accessibility | The pages pass the page check, work at phone width, and can be used with a keyboard alone | What the core's M07 test does not already check (see below); and the page check's score in the report |
 | **M08** Live deployment and documentation | The app is online at an address the owner sent you, and `README.md` and `RUBRIC.md` are filled in | That `README.md` and `RUBRIC.md` exist and have their sections filled, that no stand-in text is left in them, and that `/api/health` answers. The live address is recorded in `RUBRIC.md` once the owner has published |
 
 The M08 test cannot prove the app is live; only the address can. The report
 tool shows M08 as "documented, not yet online" until `RUBRIC.md` has a line
 `Live address: https://...`, which you add when the owner has published and
 sent you the address. Report it to the owner in the same words.
+
+**The loop for M03 and A03.** "Checked for every route" means reading the
+app's own list of routes, not typing the addresses out again (a route added
+later would then be missed). `startApp()` returns the app as `t.app`, and
+`t.app.routes` is every route: `{ method, pattern, opts }`, where `pattern`
+is the address as written (`/api/bookings/:id`) and `opts.public` is true
+for the few that need no session.
+
+```js
+test('M03 no route of the app answers without a session', async () => {
+  const open = ['/api/health'];                       // answers without a session on purpose
+  for (const route of t.app.routes.filter((r) => !r.opts.public && !open.includes(r.pattern))) {
+    const res = await t.client().request(route.method, route.pattern.replace(/:\w+/g, '1'), route.method === 'GET' ? undefined : {});
+    assert.ok([401, 403].includes(res.status), `${route.method} ${route.pattern} answered ${res.status}`);
+  }
+});
+```
+
+The same list drives A03's loop: for every route whose `pattern` has `:id`
+in it, a signed-in user who does not own record 1 is refused.
+
+**What the app's M07 test adds.** The core's M07 test already reads every
+`.html` file in `public/`, including the app's, for the language, the
+viewport line, a title, one main heading, a `main` landmark, a label for
+every field, and no script or style written into the page. Do not copy it.
+The app's test checks what only the app knows: every page a menu entry or a
+link points to exists; every page loads its own script and that file exists;
+every table has a caption and either `class="stack"` or a reason not to;
+every button has a `type`; no fixed width in `app.css` is wider than a phone
+(320 pixels); and each form's fields are in the order a keyboard user would
+expect. These read files. They do not show that a page looks right, so say
+in the report which screens you looked at, at which widths, and how.
 
 Tests that send many wrong passwords from one place run into the sign-in
 limit (five per account, twenty per address, in fifteen minutes). Clear it
@@ -332,7 +417,9 @@ between such tests: `t.db.prepare('DELETE FROM login_attempts').run()`.
 Run `node tools/rubric.js --write` when you are done. It lists each
 requirement with the number of app tests and core tests passing, and saves
 the table as `RUBRIC-RESULTS.md`. It exits with an error while a mandatory
-requirement has no passing app test.
+requirement has no passing app test. `RUBRIC-RESULTS.md` is part of what is
+handed in: it goes to GitHub with the rest, so run the command again after
+the last change.
 
 Tests that only repeat the code prove nothing. Write each one as a short
 story about a person ("a member with three bookings tries a fourth") and
@@ -350,17 +437,32 @@ check what that person and the database end up with.
   `PORT=3100 node server.js` on macOS and Linux, and in Windows PowerShell
   `$env:PORT=3100; node server.js`. Give the owner only the form for their
   system.
-- Create the first administrator with `node tools/add-user.js`. It asks for
-  the email, name and role, and makes up a password if none is typed, showing
-  it once. It works on every system and at any time. Tell the owner the
-  password once in your reply and do not write it into any file. (On a host,
-  the first administrator comes from the `ADMIN_EMAIL` and `ADMIN_PASSWORD`
-  settings instead, which only take effect while the database has no accounts
-  at all.)
-- For a demonstration, write `tools/seed.js`: it fills the app with believable
-  example data and one account per role, generates their passwords when it
-  runs, and prints them. Example data is labelled as such in the README and is
-  never loaded on the live app unless the owner asks.
+- **The first account.** `node tools/add-user.js` asks for the email, name
+  and role, and makes up a password if none is typed, showing it once. It
+  works on every system and at any time. On Windows the owner double-clicks
+  `add-account.cmd`, which runs the same thing. To run it yourself without
+  anything being typed:
+  `node tools/add-user.js --email ... --name "..." --role ... --generate`.
+  Never pass a password on the command line and never write one into a file.
+  (On a host, the first administrator comes from the `ADMIN_EMAIL` and
+  `ADMIN_PASSWORD` settings instead, which only take effect while the
+  database has no accounts at all.)
+- **Who makes it.** When the owner is with you, make their account, tell them
+  the password once in your reply, and leave `data/` in place for them. When
+  they are not, or the folder will be handed to someone else (a marker, a
+  colleague), hand it over with no `data/` folder, and tell them the two
+  steps: create an account (`add-account.cmd`, or the command), then start
+  the app. An app that arrives with accounts already in it arrives with
+  passwords somebody else knows.
+- **Example data.** `tools/seed.js` is already written except for the app's
+  own records: fill in `addExampleData()`. The careful parts are done and
+  tested: one account per role with passwords made up when it runs and shown
+  once, a refusal to load twice, and a refusal on the live app unless asked.
+  The owner runs it with `load-example-data.cmd` or `node tools/seed.js`.
+  Make dates relative to the moment it runs, and count what you promise: if
+  the hand-over says "slots for the next 14 days", load it in the evening and
+  check that today is not empty and the fourteenth day is there. Example data
+  is labelled as made up in the README.
 - Look at every screen as each role, at phone width and desktop width. With
   no browser tool, a headless browser does it: Chrome and Edge can be started
   without a window and driven from a short Node script over their debugging
@@ -405,20 +507,61 @@ yellow or assumed, and how it is published.
 
 ## 10. Handing over
 
-Report in the shape of the build report in SKILL.md, with these differences:
+An app's report has more to carry than a site's, so it has its own shape.
+Keep every part; a part with nothing in it says so in one line. Plain words
+throughout, no file paths in the first half.
 
-- **To see it**: the command that starts it and the address, and which account
-  to sign in with. Not "double-click index.html".
-- **What was proven**: the requirement table from `tools/rubric.js`, and the
-  page check's score, each with its one-line caveat (the tests cover what
-  they cover; the score is a checklist).
-- **What I assumed**: every rule you made up, for the owner to confirm.
-- **I need these from you**: real data, confirmations, and for publishing, the
-  accounts in `references/app-publish.md`.
-- **What it costs to keep online**, before they ask.
-- **Publishing** is theirs to start. If they are not there to ask, write the
-  steps from `references/app-publish.md` into `site-notes.txt` with this
-  app's real names, and report M08 as documented, not yet online.
+```
+**[App name] is built and runs on your computer. It is not online yet.**
+
+**To see it**
+1. [Only if there are no accounts yet: create yours. Windows: double-click
+   add-account.cmd. Otherwise the command.]
+2. Start it: [double-click start-app.cmd / the command], and leave that
+   window open.
+3. Open [address] and sign in with [which account; a password only if you
+   made it just now and are saying it this once].
+[To try it with made-up data: load-example-data.cmd, once.]
+
+**What it does**
+[Three or four lines: each kind of user and what they can do. Then the main
+journey in one sentence.]
+
+**What was proven**
+[The table from tools/rubric.js: each requirement, met or not, and the
+number of tests. M08 in its own words: documented, not yet online.]
+[N tests, all passing. They cover the cases listed in RUBRIC.md, not
+everything; nobody has tried to break in on purpose.]
+[Page check: N out of 100. A checklist of common faults, not a judgement of
+the design. Which screens you looked at yourself, at which widths, and how.]
+
+**What I assumed**
+[Every rule or detail you were not given, one line each, for them to
+confirm or change: slot lengths, opening hours, what cancelling does.]
+
+**I need these from you**
+[Real data, confirmations, anything still marked yellow.]
+
+**What I left out**
+[Things they might expect that are not there, and why.]
+
+**What it costs to keep online**
+[The host you would use, the monthly price to stay awake, the free plan and
+its catch. One or two sentences, before they ask.]
+
+**When you are happy with it**
+[Publishing is theirs to start. Say "put it online" and I will give the
+steps. What they will need: the accounts named in app-publish.md.]
+```
+
+Check every sentence of the report against what is in the folder before
+sending it: the number of tests, the number of days of example data, the
+names of the files to double-click. A report that promises fourteen days
+where thirteen were made is the app-sized version of a wrong phone number.
+
+If the owner is not there to ask, write the publishing steps from
+`references/app-publish.md` into `site-notes.txt` with this app's real
+names, and report M08 as documented, not yet online.
 
 Do not say an app is secure. Say what was tested, and that an app holding
 other people's data deserves a second look by someone who can read code

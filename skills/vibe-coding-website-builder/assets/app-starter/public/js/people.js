@@ -1,13 +1,17 @@
-// The administrator's screen for accounts: add people, change roles, switch
-// an account off, and set a new password for someone who is locked out.
+// The screen for accounts, for the first role in config.js: add people,
+// change roles, switch an account off, set a new password for someone who is
+// locked out, and download a backup.
 
-import { announce, api, el, showFieldErrors, withBusy } from './api.js';
+import { allRoles, announce, api, el, showFieldErrors, withBusy } from './api.js';
 import { startPage } from './shell.js';
 
-const me = await startPage(['admin']);
-const { roles } = await api('GET', '/api/auth/me');
+const me = await startPage('top');
+const roles = allRoles();
 const body = document.getElementById('people');
 const form = document.getElementById('add-form');
+const dialog = document.getElementById('password-dialog');
+const passwordForm = document.getElementById('password-form');
+let passwordFor = null;
 
 form.elements.role.replaceChildren(...roles.map((r) => el('option', { value: r }, r)));
 form.elements.role.value = roles[roles.length - 1];
@@ -17,21 +21,33 @@ async function change(id, patch, done) {
     await api('PATCH', `/api/users/${id}`, patch);
     announce(done);
   } catch (err) {
-    announce(err.message);
+    announce(err.message, 'error');
   }
   await load();
 }
 
-async function setPassword(person) {
-  const next = prompt(`New password for ${person.name} (at least 8 characters). They will be signed out everywhere.`);
-  if (!next) return;
-  try {
-    await api('POST', `/api/users/${person.id}/password`, { next });
-    announce(`${person.name} has a new password. Give it to them privately.`);
-  } catch (err) {
-    announce(err.fields ? Object.values(err.fields).join(' ') : err.message);
-  }
+function askForPassword(person) {
+  passwordFor = person;
+  passwordForm.reset();
+  showFieldErrors(passwordForm, { fields: {} });
+  document.getElementById('password-for').textContent = `For ${person.name} (${person.email}). They will be signed out everywhere.`;
+  dialog.showModal();
 }
+
+document.getElementById('cancel-password').addEventListener('click', () => dialog.close());
+
+passwordForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  withBusy(document.getElementById('save-password'), async () => {
+    try {
+      await api('POST', `/api/users/${passwordFor.id}/password`, { next: passwordForm.elements.next.value });
+      dialog.close();
+      announce(`${passwordFor.name} has a new password. Give it to them privately.`);
+    } catch (err) {
+      showFieldErrors(passwordForm, err);
+    }
+  });
+});
 
 async function load() {
   let users;
@@ -46,12 +62,14 @@ async function load() {
     role.addEventListener('change', () => change(person.id, { role: role.value }, `${person.name} is now ${role.value}.`));
     const active = el('input', { type: 'checkbox', checked: person.active === 1, 'aria-label': `${person.name} can sign in` });
     active.addEventListener('change', () => change(person.id, { active: active.checked }, `${person.name} ${active.checked ? 'can sign in again' : 'can no longer sign in'}.`));
+    // data-label is what a phone shows beside each value, where the table
+    // becomes one card per person (see table.stack in app.css).
     return el('tr', {},
       el('th', { scope: 'row' }, person.name, person.id === me.id ? ' (you)' : ''),
-      el('td', {}, person.email),
-      el('td', {}, role),
-      el('td', {}, active),
-      el('td', {}, el('button', { type: 'button', class: 'link', onclick: () => setPassword(person) }, 'Set a new one')));
+      el('td', { 'data-label': 'Email' }, person.email),
+      el('td', { 'data-label': 'Role' }, role),
+      el('td', { 'data-label': 'Can sign in' }, active),
+      el('td', { 'data-label': 'Password' }, el('button', { type: 'button', class: 'link', onclick: () => askForPassword(person) }, 'Set a new one')));
   }));
 }
 

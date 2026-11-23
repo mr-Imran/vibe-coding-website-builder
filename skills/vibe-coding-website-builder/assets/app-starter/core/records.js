@@ -14,6 +14,7 @@ import { conflict, notFound } from './errors.js';
 //     search: { q: ctx.query.q, columns: ['title', 'notes'] },
 //     filters: { status: 'eq', from: { column: 'day', op: '>=' } },
 //     sortable: ['day', 'title', 'created_at'],
+//     sorts: { timetable: ['day', 'starts_at', 'room'] },        // a named order over several columns: ?sort=timetable
 //     defaultSort: '-created_at',
 //     query: ctx.query,                                          // q, sort, page, page_size, and filter values
 //     sums: { spent: 'price_cents' },                            // totals over everything that matches, not just this page
@@ -23,7 +24,12 @@ import { conflict, notFound } from './errors.js';
 // table may be a view. For a list that needs columns from two tables (a
 // booking with its class title), create a view in a migration and list that:
 //   CREATE VIEW booking_list AS SELECT b.id, b.member_id, b.status, c.title, c.starts_at FROM bookings b JOIN classes c ON c.id = b.class_id;
-export function listQuery(db, { table, columns = ['*'], where = [], search = null, filters = {}, sortable = [], defaultSort = '-id', query = {}, sums = {} }) {
+//
+// Rows that are equal in the chosen order are then ordered by tiebreak, so
+// pages never shuffle between two requests. It is the id column unless you
+// say otherwise, which means a view must have a column called id (as the one
+// above does), or you pass tiebreak: 'another_unique_column'.
+export function listQuery(db, { table, columns = ['*'], where = [], search = null, filters = {}, sortable = [], sorts = {}, defaultSort = '-id', tiebreak = 'id', query = {}, sums = {} }) {
   const clauses = [];
   const params = [];
   for (const w of where) { clauses.push(`(${w.sql})`); params.push(...(w.params || [])); }
@@ -45,14 +51,18 @@ export function listQuery(db, { table, columns = ['*'], where = [], search = nul
   let sort = String(query.sort || defaultSort);
   let dir = 'ASC';
   if (sort.startsWith('-')) { dir = 'DESC'; sort = sort.slice(1); }
-  if (!sortable.includes(sort) && sort !== 'id') { sort = defaultSort.replace(/^-/, ''); dir = defaultSort.startsWith('-') ? 'DESC' : 'ASC'; }
+  const known = (name) => sortable.includes(name) || Object.hasOwn(sorts, name) || name === tiebreak;
+  if (!known(sort)) { sort = defaultSort.replace(/^-/, ''); dir = defaultSort.startsWith('-') ? 'DESC' : 'ASC'; }
+  const orderColumns = Object.hasOwn(sorts, sort) ? [...sorts[sort]] : [sort];
+  if (tiebreak && !orderColumns.includes(tiebreak)) orderColumns.push(tiebreak);
+  const orderSql = orderColumns.map((c) => `${ident(c)} ${dir}`).join(', ');
 
   const pageSize = Math.min(100, Math.max(1, Number.parseInt(query.page_size, 10) || 20));
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
   const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   const cols = columns.map((c) => (c === '*' ? '*' : ident(c))).join(', ');
   const total = db.prepare(`SELECT COUNT(*) AS n FROM ${ident(table)} ${whereSql}`).get(...params).n;
-  const rows = db.prepare(`SELECT ${cols} FROM ${ident(table)} ${whereSql} ORDER BY ${ident(sort)} ${dir}, id ${dir} LIMIT ? OFFSET ?`)
+  const rows = db.prepare(`SELECT ${cols} FROM ${ident(table)} ${whereSql} ORDER BY ${orderSql} LIMIT ? OFFSET ?`)
     .all(...params, pageSize, (page - 1) * pageSize);
   const totals = {};
   const sumNames = Object.keys(sums);

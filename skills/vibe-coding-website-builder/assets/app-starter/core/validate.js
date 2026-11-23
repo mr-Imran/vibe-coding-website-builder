@@ -9,7 +9,11 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/;
 
 // schema: { field: { type, required, min, max, minLength, maxLength, values, pattern, default, label } }
-// types: string, text (keeps line breaks), int, number, bool, email, date, datetime, enum
+// types: string, text (keeps line breaks), int, number, bool, email, date, datetime, enum, list
+// A list names what each item must be:
+//   days: { type: 'list', of: { type: 'int', min: 0, max: 6 }, minItems: 1, unique: true, label: 'Days' }
+// It comes back as an array. To keep one in a database column, store
+// JSON.stringify(value) and JSON.parse it when reading.
 // Returns a new object with only the fields named in the schema. Unknown
 // fields are an error, so nobody can slip in "role": "admin".
 // partial: true is for edits, where only the fields that were sent are checked.
@@ -84,6 +88,24 @@ function checkOne(value, rule, label) {
     case 'enum': {
       if (!rule.values.includes(value)) return { error: `${label} must be one of: ${rule.values.join(', ')}.` };
       return { value };
+    }
+    case 'list': {
+      if (!rule.of) throw new Error(`validate: the list ${label} needs "of", the rule for each item`);
+      if (!Array.isArray(value)) return { error: `${label} must be a list.` };
+      const max = rule.maxItems ?? 100;
+      if (value.length > max) return { error: `${label} can have at most ${max} entries.` };
+      if (rule.minItems && value.length < rule.minItems) return { error: `${label} needs at least ${rule.minItems} ${rule.minItems === 1 ? 'entry' : 'entries'}.` };
+      const items = [];
+      for (let i = 0; i < value.length; i++) {
+        let item = value[i];
+        if (typeof item === 'string' && rule.of.type !== 'text') item = item.trim();
+        if (item === undefined || item === null || item === '') return { error: `${label}: entry ${i + 1} is empty.` };
+        const one = checkOne(item, rule.of, `${label}: entry ${i + 1}`);
+        if (one.error) return one;
+        items.push(one.value);
+      }
+      if (rule.unique && new Set(items).size !== items.length) return { error: `${label} has the same entry twice.` };
+      return { value: items };
     }
     default:
       throw new Error(`validate: unknown type "${rule.type}" for ${label}`);

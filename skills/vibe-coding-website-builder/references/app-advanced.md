@@ -120,6 +120,11 @@ already refuses fields that are not in the schema, which is what stops a
 request from carrying `owner_id` or `role`. Refusals are written to
 `audit_log`; give the administrator a screen that shows them.
 
+In a route that changes a record, the order is: read the id, load the
+record, `guardRecord()`, and only then read and check the body. Checking the
+body first answers a stranger's malformed request with "your input is
+wrong", which confirms the record exists and leaves no line in the log.
+
 A record the user may not even see answers "not found", the same as one that
 does not exist, so that numbers cannot be probed. A record they may see but
 not change answers "not allowed".
@@ -131,8 +136,12 @@ is for clarity only; the route decides.
 by its id: 404 each time, the record unchanged, each attempt in the audit
 log, and the record absent from B's list. A record B may see but not change
 gives 403 on write. Sending `owner_id` or `role` in a request is refused.
+A wrong user sending nonsense in the body gets the same 404, and is logged.
 Then the loop that makes this hold for the whole app: for every route with
-an id in it, a request from the wrong user is refused.
+an id in it, a request from the wrong user is refused. Take the routes from
+`t.app.routes` (each has `method`, `pattern` and `opts`; see section 7 of
+`references/app.md`) and pick those whose `pattern` contains `:id`, so a
+route added later is covered without anyone remembering to add it.
 
 **Mistakes to avoid.** Checking the role and forgetting the ownership.
 Filtering in the page. A second route to the same data (an export, a search,
@@ -211,6 +220,12 @@ where one person may hold only one. Nothing is awaited inside `tx` (it
 refuses a function that returns a promise): read the request before, notify
 after.
 
+When each thing can be held by one person only (one slot, one person),
+`remaining` is simply 0 or 1. Keep `takeOne()`, write the rule as
+`CHECK (remaining IN (0, 1))`, and add the table's own version of "never two
+people in one slot":
+`CREATE UNIQUE INDEX one_booking_per_slot ON bookings(slot_id) WHERE status = 'booked';`
+
 Giving it back (a cancellation) is the mirror image, also in one
 transaction, and only if the booking was still active, so that cancelling
 twice does not free two seats.
@@ -224,12 +239,43 @@ instant (`Promise.all`): one 201, nineteen 409, `remaining` is 0, exactly one
 booking row. A booking that fails in a later step of the same transaction
 leaves `remaining` as it was. Cancelling twice frees one place.
 
-Then check that the test can fail. A race inside one program sometimes passes
-by timing alone, with no protection at all. Take the guard out for a moment
-(make the booking read the count and write it back), run the test, see it
-fail, and put the guard back. The starter's "four separate programs" test
-shows the stronger form, where the requests really do run at the same moment;
-copy it when the result matters.
+To make that later step fail when the app gives it no natural reason to
+(every rule is checked before `takeOne`, so the insert after it always
+works), break it from the test with a trigger, and remove the trigger
+afterwards. No code in the app changes:
+
+```js
+t.db.exec("CREATE TRIGGER t_refuse BEFORE INSERT ON bookings BEGIN SELECT RAISE(ABORT, 'test: insert refused'); END");
+const res = await member.post('/api/bookings', { slot_id });
+t.db.exec('DROP TRIGGER t_refuse');
+assert.equal(res.status, 500);
+assert.equal(t.db.prepare('SELECT remaining FROM slots WHERE id = ?').get(slot_id).remaining, 1);   // given back
+```
+
+Then check that the test can fail. A race inside one program can pass with
+no protection at all, because the requests never truly overlap. Do this in a
+scratch copy of the project, never in the owner's folder: an interrupted run
+there leaves the app unprotected. The protection has layers, so take them
+out in this order and run the test after each:
+
+1. Replace `takeOne()` with a plain `UPDATE ... SET remaining = remaining - 1`.
+   The test must fail. (The table's `CHECK` now stops the extra requests, but
+   with an error instead of "the last one has just been taken", so the count
+   of 409 answers is wrong.)
+2. Also remove the `CHECK` and the `UNIQUE` rule or index from the copy's
+   migration. Now there must be several winners, or a count below zero.
+
+If the test is still green after step 2, it proves nothing; fix the test.
+One thing that does *not* make it fail, and should not be mistaken for a
+broken test: moving "read the count, decide in code, write it back" inside
+`tx()`. `tx()` takes the database's write lock before it reads, so that
+version happens to be safe. It is still the wrong habit, because the same
+code outside `tx()`, or with an `await` between the read and the write, is
+the classic double booking.
+
+The starter's "four separate programs" test shows the stronger form, where
+the requests really do run at the same moment; copy it when the result
+matters.
 
 Do not weaken the database's own rules to make a test pass: the `CHECK` and
 `UNIQUE` rules are the last line that holds when code is wrong.

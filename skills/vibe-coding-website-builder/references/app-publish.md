@@ -106,6 +106,8 @@ Adapt the wording to the owner; one action per step.
    - `ADMIN_EMAIL` = the email they will sign in with
    - `ADMIN_PASSWORD` = a long password they make up now and keep. It is used
      once, to create their account.
+   - `TIME_ZONE` = where the business is, for example `Europe/London`. Hosts
+     run on UTC; without this, every rule about a time of day is hours out.
    - any keys for outside services the app uses (named in `.env.example`)
 4. Add the permanent place for the database: in the project view,
    right-click the empty area next to the service (or use the **Create**
@@ -123,8 +125,11 @@ the screen offers one, so the host knows when the app is ready.
 
 If the deployment fails, the owner opens **Deployments**, the failed one, and
 **View logs**, and pastes the last lines to you. The usual causes: the Node
-version is older than 22.13 (the log shows the version; the starter's `.nvmrc`
-asks for 24), or the volume is not mounted at the path in `DATA_DIR`.
+version is older than 22.13 (the log shows the version), or the volume is not
+mounted at the path in `DATA_DIR`. The app runs on Node.js 22.13 or newer;
+the starter's `.nvmrc` asks the host for 26, the version its tests were run
+on. If the host does not offer 26 yet, change that file to a version it does
+offer, 22 or higher, and say so in the README.
 
 ## 6. Right after publishing
 
@@ -142,12 +147,14 @@ With the address in hand:
 4. **Decide about sign-ups.** If only invited people should have accounts,
    set `ALLOW_SIGNUP` to `0` in the host's variables and add people from the
    **People** screen.
-5. **Set the time zone** if the app has rules about times of day: the
-   variable `TIME_ZONE`, for example `Europe/London`. Hosts run on UTC.
+5. **Check the time zone.** Make something with a time in it and see that the
+   app shows the time the owner expects. If it is hours out, the `TIME_ZONE`
+   variable from step 3 of section 5 is missing or misspelt; the app's log
+   says which zone it is using when it starts.
 6. **Walk the main journey once on the live app**, as each role, on a phone.
 7. **Record the address** in `README.md` and as `Live address: https://...`
    in `RUBRIC.md`, run `node tools/rubric.js --write` so that M08 shows as
-   met, and upload the changed files again.
+   met, and upload the changed files again, `RUBRIC-RESULTS.md` among them.
 
 ## 7. Changing the app later
 
@@ -169,11 +176,13 @@ Say these to the owner in plain words when the app goes live, and put them in
 `site-notes.txt`:
 
 - **Back it up.** The whole app's data is one file on the host's volume. A
-  host can lose a volume, and a mistaken update can damage data. Give the
-  administrator a "download a backup" button (a route for the highest role
-  that sends a copy of the database made with `VACUUM INTO` a temporary
-  file), and suggest a regular day for pressing it. Keep backups somewhere
-  private: they contain everyone's records.
+  host can lose a volume, and a mistaken update can damage data. The
+  **People** screen has a **Download a backup** button for the first role
+  (it comes with the starter, in `core/backup.js`). Have the owner press it
+  once now, to see that a file arrives, and suggest a regular day for it.
+  Backups go somewhere private: they contain everyone's records. Going back
+  to a backup means replacing the database file on the host's volume, which
+  needs you or someone technical; say that now, not on the day it is needed.
 - **It holds personal data.** In the EU, the UK and many other places that
   brings duties: a privacy page saying what is stored and why, a way for a
   person to have their data removed, and telling people if it leaks. Offer to

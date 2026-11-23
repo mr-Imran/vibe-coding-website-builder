@@ -15,6 +15,9 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "..", "skills", "vibe-coding-website-builder", "scripts", "site_check.py")
+# Loading the script must not leave a __pycache__ folder inside the skill,
+# which is copied whole when the skill is installed.
+sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("site_check", SCRIPT)
 site_check = importlib.util.module_from_spec(spec)
 sys.modules["site_check"] = site_check
@@ -284,6 +287,25 @@ class SiteCheckTests(unittest.TestCase):
         self.assertTrue(any("data" in n and "must not be uploaded" in n for n in rep["notes"]))
         self.assertFalse(any("start with a slash" in n for n in rep["notes"]))
         self.assertEqual(rep["verdict"], "ready")
+
+    def test_app_addresses_without_a_file_ending_and_api_routes_are_not_broken_links(self):
+        body = ('<a href="/about">About</a> <a href="/about?tab=team#main">Team</a> '
+                '<a href="/api/backup" download>Backup</a> <a href="/nowhere">Gone</a>')
+        make_site(os.path.join(self.dir, "public"), index=GOOD_PAGE.format(title="Home - Studio", h1="Home", body=body))
+        with open(os.path.join(self.dir, "server.js"), "w", encoding="utf-8") as fh:
+            fh.write("// the app")
+        rep = check(self.dir)
+        self.assertEqual(rep["kind"], "app")
+        where = " ".join(rep["by_id"]["works.links"]["where"])
+        self.assertIn("/nowhere", where)
+        self.assertNotIn("/about", where)
+        self.assertNotIn("/api/backup", where)
+        self.assertEqual(self.status(rep, "works.anchors"), "pass")
+
+    def test_plain_site_address_without_a_file_ending_is_still_a_broken_link(self):
+        make_site(self.dir, body='<a href="about">About</a>')
+        rep = check(self.dir)
+        self.assertEqual(self.status(rep, "works.links"), "fail")
 
     def test_secret_in_an_app_s_server_code_still_stops_publishing(self):
         make_site(os.path.join(self.dir, "public"))

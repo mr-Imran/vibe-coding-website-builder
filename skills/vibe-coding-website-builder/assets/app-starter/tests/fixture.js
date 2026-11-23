@@ -18,6 +18,7 @@ const THING = {
   notes: { type: 'text', label: 'Notes' },
   status: { type: 'enum', values: ['open', 'done'], default: 'open', label: 'Status' },
   price: { type: 'number', min: 0, default: 0, label: 'Price' },
+  days: { type: 'list', of: { type: 'int', min: 0, max: 6 }, unique: true, maxItems: 7, label: 'Days' },
 };
 const rules = {
   entity: 'thing',
@@ -32,7 +33,7 @@ export function setupFixture({ app, db, auth, hub }) {
       id INTEGER PRIMARY KEY,
       owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       title TEXT NOT NULL, notes TEXT, status TEXT NOT NULL DEFAULT 'open',
-      price REAL NOT NULL DEFAULT 0, shared INTEGER NOT NULL DEFAULT 0,
+      price REAL NOT NULL DEFAULT 0, shared INTEGER NOT NULL DEFAULT 0, days TEXT,
       version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT
     );
     CREATE TABLE t_slots (id INTEGER PRIMARY KEY, name TEXT NOT NULL, remaining INTEGER NOT NULL CHECK (remaining >= 0));
@@ -51,6 +52,7 @@ export function setupFixture({ app, db, auth, hub }) {
       search: { q: ctx.query.q, columns: ['title', 'notes'] },
       filters: { status: 'eq', min_price: { column: 'price', op: '>=' } },
       sortable: ['title', 'price', 'created_at'], defaultSort: '-created_at',
+      sorts: { by_status: ['status', 'title'] },
       sums: { priceTotal: 'price' },
     });
     return { ...list, priceTotal: list.sums.priceTotal };
@@ -58,8 +60,8 @@ export function setupFixture({ app, db, auth, hub }) {
 
   app.post('/api/_t/things', auth.requireUser, (ctx) => once(ctx, async () => {
     const input = check(await ctx.body(), THING);
-    const info = db.prepare('INSERT INTO t_things (owner_id, title, notes, status, price, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(ctx.user.id, input.title, input.notes ?? null, input.status, input.price, now());
+    const info = db.prepare('INSERT INTO t_things (owner_id, title, notes, status, price, days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(ctx.user.id, input.title, input.notes ?? null, input.status, input.price, input.days ? JSON.stringify(input.days) : null, now());
     ctx.status(201);
     return { id: Number(info.lastInsertRowid) };
   }));
@@ -71,11 +73,16 @@ export function setupFixture({ app, db, auth, hub }) {
 
   app.patch('/api/_t/things/:id', auth.requireUser, async (ctx) => {
     const id = idParam(ctx.params.id);
+    // Guard first, then look at what was sent. The other way round, someone
+    // poking at another person's record with a malformed request gets a
+    // "your input is wrong" answer (which tells them the record exists) and
+    // the attempt never reaches the audit log.
+    guardRecord(ctx, db.prepare('SELECT * FROM t_things WHERE id = ?').get(id), rules, 'write');
     const body = await ctx.body();
     const { version, ...rest } = body;
-    const input = check(rest, THING, { partial: true });
-    guardRecord(ctx, db.prepare('SELECT * FROM t_things WHERE id = ?').get(id), rules, 'write');
-    const thing = updateVersioned(db, 't_things', id, version, input, ['title', 'notes', 'status', 'price']);
+    const { days, ...input } = check(rest, THING, { partial: true });
+    if (days !== undefined) input.days = days === null ? null : JSON.stringify(days);
+    const thing = updateVersioned(db, 't_things', id, version, input, ['title', 'notes', 'status', 'price', 'days']);
     hub.publish('thing.changed', { id, version: thing.version }, { audience: (u) => rules.read(u, thing) });
     return { thing };
   });

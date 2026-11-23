@@ -8,6 +8,8 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo Starting. Open http://localhost:3000 in your browser.
+echo Starting. The address to open in your browser appears below.
+echo Leave this window open while you use the app. Close it to stop the app.
+echo.
 node server.js
 pause

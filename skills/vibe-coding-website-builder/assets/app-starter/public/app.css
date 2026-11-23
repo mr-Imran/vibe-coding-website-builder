@@ -83,6 +83,43 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 table { border-collapse: collapse; width: 100%; background: var(--surface); }
 th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 
+/* A table that turns into one card per row on a phone. Give the table
+   class="stack", make the first cell of each row a <th scope="row">, and
+   give every other cell data-label="Column name". Wide tables without it
+   scroll sideways inside .table-scroll, which is harder to use. */
+@media (max-width: 47.99rem) {
+  table.stack { background: none; }
+  table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  table.stack tr { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.25rem 0.75rem; margin-bottom: 0.75rem; }
+  table.stack th[scope="row"], table.stack td { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.25rem 1rem; padding: 0.5rem 0; }
+  table.stack th[scope="row"] { font-size: 1.05rem; }
+  table.stack tr > :last-child { border-bottom: 0; }
+  table.stack td[data-label]::before { content: attr(data-label); color: var(--soft); font-weight: 600; }
+}
+
+/* What announce() writes: a message at the bottom of the window, wherever
+   the person has scrolled to. */
+#status:not(:empty) {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 20;
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+#status[data-kind="error"]:not(:empty) { background: var(--danger); }
+
+dialog { width: min(26rem, calc(100% - 2rem)); border: 1px solid var(--line); border-radius: 10px; padding: 1.5rem; color: var(--ink); background: var(--surface); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+dialog h2 { margin-top: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1rem 0 0; }
+
 .notice { border-left: 5px solid var(--accent); background: var(--surface); padding: 0.75rem 1rem; margin: 1rem 0; }
 .notice.warn { border-color: var(--danger); }
 .notice.ok { border-color: var(--ok); }

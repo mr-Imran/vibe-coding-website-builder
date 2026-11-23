@@ -12,7 +12,10 @@ const quiet = { log() {}, error() {} };
 // setup(built) can create extra tables and routes before the server listens.
 export async function startApp({ setup = null, config = {}, dir = null, log = quiet } = {}) {
   const dataDir = dir || fs.mkdtempSync(path.join(os.tmpdir(), 'app-test-'));
-  const built = await buildApp(loadConfig({}, { dataDir, port: 0, host: '127.0.0.1', ...config }), { log });
+  // Tests run on UTC unless they say otherwise, so they give the same answer
+  // on every computer. Pass config: { timeZone: 'Europe/London' } to test a
+  // rule about a time of day.
+  const built = await buildApp(loadConfig({}, { dataDir, port: 0, host: '127.0.0.1', timeZone: 'UTC', ...config }), { log });
   if (setup) await setup(built);
   const server = await built.app.listen(0, '127.0.0.1');
   const base = `http://127.0.0.1:${server.address().port}`;

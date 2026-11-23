@@ -3,10 +3,12 @@
 // own modules and deployment, so their tests live in your module test files.
 
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
+import { loadConfig } from '../config.js';
 import { hashPassword, verifyPassword } from '../core/auth.js';
 import { migrate, openDb, tx } from '../core/db.js';
 import { localParts, zonedToUtc } from '../core/time.js';
@@ -308,9 +310,10 @@ describe('core', () => {
   test('core M06 broken, oversized and unexpected requests get a clear answer and never a crash', async () => {
     const broken = await ann.post('/api/_t/things', '{"title": ', { 'Content-Type': 'application/json' });
     assert.equal(broken.status, 400);
+    const own = (await ann.post('/api/_t/things', { title: 'Mine to edit' })).body.id;
     for (const odd of ['null', '[1, 2]', '"text"', '7']) {
       assert.equal((await ann.post('/api/_t/things', odd, { 'Content-Type': 'application/json' })).status, 400, odd);
-      assert.equal((await ann.patch('/api/_t/things/1', odd, { 'Content-Type': 'application/json' })).status, 400, odd);
+      assert.equal((await ann.patch(`/api/_t/things/${own}`, odd, { 'Content-Type': 'application/json' })).status, 400, odd);
     }
     const form = await ann.post('/api/_t/things', 'title=x', { 'Content-Type': 'application/x-www-form-urlencoded' });
     assert.equal(form.status, 415);
@@ -324,6 +327,205 @@ describe('core', () => {
     assert.ok(!boom.text.includes('secret internal detail'));
     assert.match(boom.body.error.message, /Reference: /);
     assert.equal((await ann.get('/api/health')).status, 200);       // still up
+  });
+
+  // ---------------------------------------------------------------- what an app builds on
+
+  test('core M03 the People screen belongs to the first role, whatever the app calls it', async () => {
+    const s = await startApp({ config: { roles: ['staff', 'member'], defaultRole: 'member', allowSignup: true } });
+    try {
+      const staff = await s.user('staff@test.local', 'staff');
+      const member = await s.user('member@test.local');
+      assert.equal((await staff.get('/api/users')).status, 200);
+      assert.equal((await member.get('/api/users')).status, 403);
+      const me = (await staff.get('/api/auth/me')).body;
+      assert.deepEqual(me.roles, ['staff', 'member']);
+
+      // The pages decide the same way: 'top' is the first role, not a fixed name.
+      const page = await import('../public/js/api.js');
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = async () => new Response(JSON.stringify(me), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      try { await page.loadSession(); } finally { globalThis.fetch = realFetch; }
+      assert.equal(page.allows('top', 'staff'), true);
+      assert.equal(page.allows('top', 'member'), false);
+      assert.equal(page.allows('top', 'admin'), false);
+      assert.equal(page.allows(['member'], 'member'), true);
+      assert.equal(page.allows(null, 'member'), true);
+      const js = path.resolve(import.meta.dirname, '../public/js');
+      assert.match(fs.readFileSync(path.join(js, 'people.js'), 'utf8'), /startPage\('top'\)/);
+      assert.match(fs.readFileSync(path.join(js, 'shell.js'), 'utf8'), /href: '\/people'[^\n]*roles: 'top'/);
+    } finally { await s.stop(); }
+  });
+
+  test('core M03 a module can react when an account is created or changed, in the same transaction', async () => {
+    const changes = [];
+    const s = await startApp({
+      config: CORE,
+      setup({ db, auth }) {
+        db.exec('CREATE TABLE t_profiles (user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, approved INTEGER NOT NULL DEFAULT 0)');
+        auth.on('user.created', (user) => {
+          if (user.email.startsWith('unlucky')) throw new Error('the profile could not be made');
+          db.prepare('INSERT INTO t_profiles (user_id) VALUES (?)').run(user.id);
+        });
+        auth.on('user.changed', (user, before) => changes.push({ id: user.id, was: before.active, is: user.active, role: user.role }));
+        assert.throws(() => auth.on('user.deleted', () => {}), /no event/);
+      },
+    });
+    try {
+      const boss = await s.user('boss@test.local', 'admin');
+      const signup = await s.client().post('/api/auth/signup', { email: 'new@test.local', name: 'New', password: 'a long password' });
+      assert.equal(signup.status, 201);
+      const made = await boss.post('/api/users', { email: 'made@test.local', name: 'Made', role: 'member', password: 'a long password' });
+      assert.equal(made.status, 201);
+      assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM t_profiles').get().n, 3, 'one profile per account, however it was created');
+
+      // If the listener fails, there is no half-made account.
+      const unlucky = await s.client().post('/api/auth/signup', { email: 'unlucky@test.local', name: 'Unlucky', password: 'a long password' });
+      assert.equal(unlucky.status, 500);
+      assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = 'unlucky@test.local'").get().n, 0);
+
+      assert.equal((await boss.patch(`/api/users/${made.body.id}`, { active: false })).status, 204);
+      assert.deepEqual(changes, [{ id: made.body.id, was: 1, is: 0, role: 'member' }]);
+
+      // A listener that waits for something would run outside the transaction: refused.
+      s.auth.on('user.created', async () => {});
+      await assert.rejects(s.auth.createUser({ email: 'late@test.local', name: 'Late', password: 'a long password' }), /async/);
+      assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = 'late@test.local'").get().n, 0);
+    } finally { await s.stop(); }
+  });
+
+  test('core M02 the first role can download a complete copy of the database; nobody else can', async () => {
+    assert.equal((await t.client().get('/api/backup')).status, 401);
+    assert.equal((await ann.get('/api/backup')).status, 403);
+    const res = await fetch(`${t.base}/api/backup`, { headers: { Cookie: admin.cookie } });
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-disposition'), /^attachment; filename="[a-z0-9-]+-backup-\d{4}-\d{2}-\d{2}\.db"$/);
+    const bytes = Buffer.from(await res.arrayBuffer());
+    assert.equal(bytes.subarray(0, 15).toString('latin1'), 'SQLite format 3');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'restore-'));
+    fs.writeFileSync(path.join(dir, 'copy.db'), bytes);
+    const copy = openDb(path.join(dir, 'copy.db'));
+    assert.equal(copy.prepare('SELECT COUNT(*) AS n FROM users').get().n, t.db.prepare('SELECT COUNT(*) AS n FROM users').get().n);
+    assert.equal(copy.prepare('SELECT COUNT(*) AS n FROM t_things').get().n, t.db.prepare('SELECT COUNT(*) AS n FROM t_things').get().n);
+    copy.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.equal(t.db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'backup.downloaded'").get().n, 1);
+  });
+
+  test('core M05 a list can be ordered by several columns at once, in either direction', async () => {
+    const cara = await t.user('cara@test.local');
+    for (const [title, status] of [['Pear', 'open'], ['Apple', 'done'], ['Fig', 'open'], ['Kiwi', 'done']]) {
+      await cara.post('/api/_t/things', { title, status });
+    }
+    const order = async (sort) => (await cara.get(`/api/_t/things?sort=${sort}&page_size=50`)).body.rows.filter((r) => r.owner_id === cara.id).map((r) => r.title);
+    assert.deepEqual(await order('by_status'), ['Apple', 'Kiwi', 'Fig', 'Pear']);       // status first, then title
+    assert.deepEqual(await order('-by_status'), ['Pear', 'Fig', 'Kiwi', 'Apple']);
+    assert.deepEqual(await order('title'), ['Apple', 'Fig', 'Kiwi', 'Pear']);
+    assert.equal((await cara.get('/api/_t/things?sort=owner_id;DROP')).status, 200, 'an unknown order falls back to the default');
+  });
+
+  test('core M06 a list in a form is checked entry by entry', async () => {
+    const DAYS = { days: { type: 'list', of: { type: 'int', min: 0, max: 6 }, minItems: 1, maxItems: 7, unique: true, label: 'Days' } };
+    assert.deepEqual(check({ days: [1, '3', 5] }, DAYS), { days: [1, 3, 5] });
+    const problem = (input) => { try { check(input, DAYS); return null; } catch (err) { return err.extra.fields.days; } };
+    assert.match(problem({ days: '1,3' }), /must be a list/);
+    assert.match(problem({ days: [1, 9] }), /entry 2 must be at most 6/);
+    assert.match(problem({ days: [1, 'x'] }), /entry 2 must be a number/);
+    assert.match(problem({ days: [1, null] }), /entry 2 is empty/);
+    assert.match(problem({ days: [2, 2] }), /same entry twice/);
+    assert.match(problem({ days: [] }), /at least 1 entry/);
+    assert.match(problem({ days: [0, 1, 2, 3, 4, 5, 6, 0] }), /at most 7/);
+    const made = await ann.post('/api/_t/things', { title: 'Open days', days: [1, 3] });
+    assert.equal(made.status, 201);
+    assert.equal(t.db.prepare('SELECT days FROM t_things WHERE id = ?').get(made.body.id).days, '[1,3]');
+    assert.equal((await ann.post('/api/_t/things', { title: 'Bad days', days: [8] })).status, 422);
+  });
+
+  test('core M04 the clock is the business\'s: TIME_ZONE when set, otherwise this computer\'s own zone', () => {
+    assert.equal(loadConfig({ TIME_ZONE: 'Asia/Tokyo' }).timeZone, 'Asia/Tokyo');
+    assert.equal(loadConfig({}).timeZone, Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+    assert.equal(t.config.timeZone, 'UTC', 'tests run on UTC so they give the same answer everywhere');
+  });
+
+  // The command-line tools are what a person without a terminal habit is
+  // given (through the .cmd files on Windows), so they are run for real here.
+  const starter = path.resolve(import.meta.dirname, '..');
+  const runTool = (file, args, { input = '', env = {} } = {}) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-'));
+    const run = (more = []) => spawnSync(process.execPath, [path.join('tools', file), ...args, ...more], {
+      cwd: starter, input, encoding: 'utf8', timeout: 60_000,
+      env: { ...process.env, NODE_ENV: '', ADMIN_EMAIL: '', ADMIN_PASSWORD: '', DATA_DIR: dir, ...env },
+    });
+    return { dir, run, done: () => fs.rmSync(dir, { recursive: true, force: true }) };
+  };
+
+  test('core M03 an account can be made from the command line without typing a password anywhere', () => {
+    const role = loadConfig({}).roles[0];
+    const tool = runTool('add-user.js', ['--email', 'First@Test.local', '--name', 'First Person', '--generate']);
+    try {
+      const out = tool.run();
+      assert.equal(out.status, 0, out.stderr);
+      assert.ok(!out.stdout.includes('Role ('), 'with --generate, nothing is asked');
+      const password = /Password: (\S+)/.exec(out.stdout)?.[1];
+      assert.ok(password && password.length >= 12, 'a made-up password is shown once');
+      const db = openDb(path.join(tool.dir, 'app.db'));
+      const row = db.prepare('SELECT * FROM users').get();
+      db.close();
+      assert.equal(row.email, 'first@test.local');
+      assert.equal(row.role, role, 'the first role, when none is named');
+      assert.ok(!row.password_hash.includes(password));
+      // The same account twice is refused, in words.
+      const again = tool.run();
+      assert.equal(again.status, 1);
+      assert.match(again.stderr, /already an account/);
+    } finally { tool.done(); }
+
+    // Every answer can also arrive on standard input, as when another program drives it.
+    const piped = runTool('add-user.js', [], { input: 'second@test.local\nSecond Person\n\n\n' });
+    try {
+      const out = piped.run();
+      assert.equal(out.status, 0, out.stderr);
+      assert.match(out.stdout, /Created \S+ account for second@test\.local/);
+      assert.match(out.stdout, /Password: \S{12,}/);
+    } finally { piped.done(); }
+
+    const bad = runTool('add-user.js', ['--email', 'not-an-email', '--generate']);
+    try { assert.equal(bad.run().status, 1); } finally { bad.done(); }
+  });
+
+  test('core M02 example data loads once, with made-up passwords, and not on the live app by accident', () => {
+    const roles = loadConfig({}).roles;
+    const tool = runTool('seed.js', []);
+    try {
+      const first = tool.run();
+      assert.equal(first.status, 0, first.stderr);
+      for (const role of roles) assert.match(first.stdout, new RegExp(`${role}@example\\.com\\s+\\S{12}`));
+      const db = openDb(path.join(tool.dir, 'app.db'));
+      assert.equal(db.prepare("SELECT COUNT(*) AS n FROM users WHERE email LIKE '%@example.com'").get().n, roles.length);
+      db.close();
+      const second = tool.run();
+      assert.equal(second.status, 1);
+      assert.match(second.stderr, /already loaded/);
+    } finally { tool.done(); }
+
+    const live = runTool('seed.js', [], { env: { NODE_ENV: 'production' } });
+    try {
+      const out = live.run();
+      assert.equal(out.status, 1);
+      assert.match(out.stderr, /live app/);
+      assert.ok(!fs.existsSync(path.join(live.dir, 'app.db')), 'nothing is created');
+    } finally { live.done(); }
+  });
+
+  test('core M08 the double-click files for Windows are complete', () => {
+    const files = { 'start-app.cmd': 'server.js', 'add-account.cmd': 'tools\\add-user.js', 'load-example-data.cmd': 'tools\\seed.js' };
+    for (const [name, runs] of Object.entries(files)) {
+      const text = fs.readFileSync(path.join(starter, name), 'utf8');
+      assert.ok(text.includes(`node ${runs}`), `${name} runs ${runs}`);
+      assert.ok(fs.existsSync(path.join(starter, ...runs.split('\\'))), `${runs} exists`);
+      assert.ok(text.includes('\r\n') && !/[^\r]\n/.test(text), `${name} has Windows line endings (batch files misbehave without them)`);
+      assert.ok(!/localhost:\d+/.test(text), `${name} does not promise an address; the app prints the real one`);
+    }
   });
 
   // ---------------------------------------------------------------- M07 pages
@@ -342,6 +544,7 @@ describe('core', () => {
         assert.ok(id && html.includes(`<label for="${id[1]}"`), `${name}: a label for ${input}`);
       }
       assert.ok(!/<script(?![^>]*\bsrc=)/.test(html), `${name}: no inline scripts (the security policy blocks them)`);
+      assert.ok(!/<style[\s>]/.test(html) && !/\sstyle\s*=/.test(html), `${name}: no styles written into the page (the security policy ignores them, silently; use a class in app.css)`);
     }
   });
 

@@ -153,9 +153,22 @@ describe('advanced', () => {
     assert.equal((await ben.get(`/api/_t/things/${id}`)).status, 200);
     assert.equal((await ben.patch(`/api/_t/things/${id}`, { title: 'edited by Ben', version: 1 })).status, 403);
     assert.equal((await ben.delete(`/api/_t/things/${id}`)).status, 403);
-    // Ownership cannot be handed over through the request either.
-    assert.equal((await ben.patch(`/api/_t/things/${id}`, { owner_id: ben.id, version: 1 })).status, 422);
+    // Ownership cannot be taken through the request, or given away by the owner.
+    assert.equal((await ben.patch(`/api/_t/things/${id}`, { owner_id: ben.id, version: 1 })).status, 403);
+    assert.equal((await ann.patch(`/api/_t/things/${id}`, { owner_id: ben.id, version: 1 })).status, 422);
     assert.equal(t.db.prepare('SELECT owner_id FROM t_things WHERE id = ?').get(id).owner_id, ann.id);
+  });
+
+  test('core A03 the record is guarded before the request is read, so a malformed attempt is refused and logged like any other', async () => {
+    const id = (await ann.post('/api/_t/things', { title: 'Private to Ann' })).body.id;
+    const before = t.db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'access.denied' AND entity_id = ?").get(String(id)).n;
+    // Nonsense in the body must not turn "not found" into "your input is wrong",
+    // which would tell Ben that record exists.
+    assert.equal((await ben.patch(`/api/_t/things/${id}`, { title: '', price: 'lots', version: 'x' })).status, 404);
+    assert.equal((await ben.patch(`/api/_t/things/${id}`, '{"title": ', { 'Content-Type': 'application/json' })).status, 404);
+    const after = t.db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'access.denied' AND entity_id = ?").get(String(id)).n;
+    assert.equal(after - before, 2);
+    assert.equal(t.db.prepare('SELECT title FROM t_things WHERE id = ?').get(id).title, 'Private to Ann');
   });
 
   // ---------------------------------------------------------------- A04 offline-first

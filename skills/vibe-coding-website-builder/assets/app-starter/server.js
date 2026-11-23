@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
 import { createAuth } from './core/auth.js';
+import { registerBackup } from './core/backup.js';
 import { migrate, openDb } from './core/db.js';
 import { createApp } from './core/http.js';
 import { forgetOldKeys } from './core/idempotency.js';
@@ -26,6 +27,7 @@ export async function buildApp(config = loadConfig(), { log = console } = {}) {
   const app = createApp({ db, config, auth, log, publicDir: path.join(here, 'public') });
 
   auth.registerRoutes(app);
+  registerBackup(app, { db, config, auth });
   app.get('/api/events', hub.subscribe);
   app.get('/api/health', () => ({ ok: true }));           // hosts call this to see that the app is up
   registerModules(app, { db, config, auth, hub });
@@ -51,6 +53,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const built = await buildApp(config);
   const server = await built.app.listen();
   console.log(`${config.appName} is running: http://localhost:${server.address().port}`);
+  if (config.production && !process.env.TIME_ZONE) {
+    console.log(`TIME_ZONE is not set, so rules about times of day use this computer's zone (${config.timeZone}). Hosts usually run on UTC; set TIME_ZONE to where the business is, for example Europe/London.`);
+  }
   const stop = async () => { await built.close(server); process.exit(0); };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);

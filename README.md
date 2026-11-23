@@ -81,7 +81,9 @@ node --test                    # every test
 node tools/rubric.js --write   # the tests, counted against M01 to A08
 ```
 
-The starter has 51 tests of its own, one group for each requirement it helps with. They include four separate programs fighting over five places in one database (five are given out, never six), an outside service that times out and sends garbage, a multi-step job whose middle step fails, and a 100,000-row import with duplicates and gaps. M08 is reported as "documented, not yet online" until the app's real address is on record, because a test cannot show that an app is live.
+The starter has 61 tests of its own, one group for each requirement it helps with. They include four separate programs fighting over five places in one database (five are given out, never six), an outside service that times out and sends garbage, a multi-step job whose middle step fails, and a 100,000-row import with duplicates and gaps.
+
+It also comes with what every app ends up needing: screens for people and accounts, a backup download, and three files to double-click on Windows (create an account, start the app, load example data), so the owner never has to type a command. M08 is reported as "documented, not yet online" until the app's real address is on record, because a test cannot show that an app is live.
 
 An app costs a little to keep online (about five US dollars a month to stay awake; there is a small free plan that sleeps) and puts other people's data in your care. When a hosted service behind a link would do the job, the skill says so first.
 
@@ -114,7 +116,7 @@ Four test cases live in [`skills/vibe-coding-website-builder/evals`](skills/vibe
 | "I want a website for my cake business, I don't know anything about coding" | 12 of 12 | 10 of 12 |
 | "I built this with ChatGPT, is it OK to publish? Don't change anything" (a site with a leaked payment key) | 12 of 12 | 11 of 12 |
 | "How do I get it on the internet? And the contact form sends nothing" | 10 of 10 | 9 of 10 |
-| "I need a booking app for our makerspace, marked against this list" (M01 to M08, A03, A05) | 15 of 15 | 12 of 15 |
+| "I need a booking app for our makerspace, marked against this list" (M01 to M08, A03, A05) | 15 of 15 (run twice) | 12 of 15 |
 
 Read these with some care:
 
@@ -124,7 +126,11 @@ Read these with some care:
 - Not counted in the table: the runs with the skill marked every gap with a yellow note and left a `site-notes.txt` for the owner. One of them also moved an existing site into a new folder without being asked; the skill now says to leave an existing site where it is, and that change has not been re-run.
 - The skill costs more: about 20% more tokens on average across the three site cases, and 23% more on the app case (about 406,000 against 331,000).
 - The app case, in more detail. Both runs produced a working app with no packages, about 85 passing tests each, and the four stated rules enforced on the server; the grader started both and attacked them with direct requests. Without the skill, the app shipped fixed demo passwords in its files and on its sign-in page, with instructions to switch them on for the live site, and its final message left the cost of hosting to a separate document. That cost three assertions, two of them for the one decision about passwords. The grader also removed the protections on purpose: the skill's tests failed as they should; without the skill, the in-program race tests still passed and only its two-program test caught it, which its own notes say. That run had good ideas the skill has since taken: the two-program race test is now in the starter.
-- The app run with the skill found twenty rough spots in the starter and the guides (core tests that broke when roles were renamed, no password screen, commands that only worked on macOS and Linux, and others). They are fixed, and the starter's screens were then driven in a headless browser, but the app case has not been run again since.
+- The app run with the skill found twenty rough spots in the starter and the guides (core tests that broke when roles were renamed, no password screen, commands that only worked on macOS and Linux, and others). They were fixed, and the starter's screens were then driven in a headless browser.
+- The app case was then run a second time with the skill, on v0.2.0: 15 of 15 again, 93 passing tests, about 405,000 tokens. The grader removed each protection in turn (the last-slot guard, the ownership checks, each of the four rules) and the app's tests caught every removal. The run without the skill was not repeated, so the 12 of 15 is still from the first round.
+- That second run did not find a clean starter. It listed 26 more rough spots. The main ones: renaming the roles locked the top role out of the People screen; the site check reported an app's own addresses, such as `/book`, as broken links; the starter's README gave a start command that only worked on macOS and Linux; and there was no double-click way to create the first account. The grader also found one false sentence in the final message (example slots "for the next 14 days" when 13 were created) and could not check the pages at phone width.
+- All 26 are addressed in v0.2.1, each code change with a test (the starter went from 51 tests to 61, the check from 33 to 35). The starter was then copied, its roles renamed the way the guide says, and its screens driven in a headless browser as both roles at phone and desktop width, with no script errors. The claims the guides make about the race test were checked one by one against the starter. The app case has not been run a third time, so whether a fresh build now goes smoothly is not yet known; going by the first two rounds, expect it to find more.
+- One of the 26 is handled by procedure, not by a change to the files: the test cases live inside the skill folder, where an agent under test can see the graders' file names. Runs done by hand should use a copy of the skill without `evals/` ([CONTRIBUTING.md](CONTRIBUTING.md)). The two app runs above did not, and the second run's notes say it saw the names and did not open the files.
 
 ## Limitations
 

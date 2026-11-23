@@ -4,6 +4,7 @@
 
 let csrf = null;
 let current = null;
+let roleNames = [];
 
 export class ApiError extends Error {
   constructor(status, body) {
@@ -23,6 +24,7 @@ export async function loadSession() {
     const data = await api('GET', '/api/auth/me');
     csrf = data.csrf;
     current = data.user;
+    roleNames = data.roles || [];
     return current;
   } catch (err) {
     if (err.status === 401) { current = null; return null; }
@@ -30,11 +32,24 @@ export async function loadSession() {
   }
 }
 
+// The app's roles as config.js lists them, most powerful first.
+export const allRoles = () => roleNames;
+
+// May someone with this role use a page or see a menu entry?
+//   null             anyone signed in
+//   'top'            the first role in config.js, whatever the app calls it
+//   ['staff', ...]   these roles
+export function allows(roles, role) {
+  if (!roles) return true;
+  if (roles === 'top') return roleNames.length > 0 && role === roleNames[0];
+  return roles.includes(role);
+}
+
 // For pages that need a signed-in user: sends everyone else to the sign-in page.
 export async function requireSession(roles = null) {
   const user = await loadSession();
   if (!user) { location.href = `/login?next=${encodeURIComponent(location.pathname)}`; return new Promise(() => {}); }
-  if (roles && !roles.includes(user.role)) { location.href = '/'; return new Promise(() => {}); }
+  if (!allows(roles, user.role)) { location.href = '/'; return new Promise(() => {}); }
   return user;
 }
 
@@ -99,6 +114,15 @@ export function el(tag, props = {}, ...children) {
     if (value === false || value === null || value === undefined) continue;
     if (key === 'class') node.className = value;
     else if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2), value);
+    else if (key === 'style') {
+      // The app's security policy ignores style="..." written into the page,
+      // silently. Styles belong in app.css as a class. For a value that is
+      // only known at run time (a width in percent), pass an object.
+      if (typeof value !== 'object') throw new Error('el(): give style as an object, { width: "40%" }, or use a class from app.css. A style written as text is blocked by the security policy.');
+      for (const [name, v] of Object.entries(value)) {
+        if (name.startsWith('--')) node.style.setProperty(name, v); else node.style[name] = v;
+      }
+    }
     else node.setAttribute(key, value === true ? '' : value);
   }
   for (const child of children.flat(Infinity)) {
@@ -108,7 +132,17 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
-export function announce(message) {
+// Tell the person what just happened: announce('Booked.') or
+// announce('That did not work.', 'error'). The message appears at the bottom
+// of the window wherever they have scrolled to, and screen readers read it
+// out. Good news fades after a few seconds; a problem stays until the next
+// message. Every signed-in page needs <p id="status" role="status" aria-live="polite"></p>.
+let statusTimer = null;
+export function announce(message, kind = 'ok') {
   const region = document.getElementById('status');
-  if (region) region.textContent = message;
+  if (!region) return;
+  clearTimeout(statusTimer);
+  region.textContent = message || '';
+  region.dataset.kind = kind;
+  if (message && kind !== 'error') statusTimer = setTimeout(() => { region.textContent = ''; }, 8000);
 }

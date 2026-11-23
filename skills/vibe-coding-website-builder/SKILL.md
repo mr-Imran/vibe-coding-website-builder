@@ -21,7 +21,7 @@ compatibility: >-
   references/checklist.md lists the same checks to do by reading the files.
   Apps need Node.js 22.13 or newer on the person's computer and nothing else.
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 # Vibe Coding Website Builder
@@ -263,11 +263,14 @@ Read `references/app.md` before anything else. In short:
    `node tools/rubric.js --write` in the project folder prints the table.
 5. **Run the page check** on the project folder as for a site; it reads the
    app's `public/` folder.
-6. **Hand over** with the requirement table, the rules you assumed, how to
-   start the app and sign in, and what it costs to keep online. Putting an app
-   online is in `references/app-publish.md`: it needs a host that keeps a
-   program running and a permanent place for the database, which usually
-   costs a few dollars a month.
+6. **Hand over** with the report template in section 10 of
+   `references/app.md`, not the site's template above: how to create an
+   account, start the app and sign in (on Windows, three files to
+   double-click), the requirement table, the rules you assumed, and what it
+   costs to keep online. Check each sentence of it against the folder before
+   sending. Putting an app online is in `references/app-publish.md`: it needs
+   a host that keeps a program running and a permanent place for the
+   database, which usually costs a few dollars a month.
 
 | | Mandatory, every app | | Advanced, on request |
 |---|---|---|---|

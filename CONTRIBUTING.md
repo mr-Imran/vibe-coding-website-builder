@@ -60,6 +60,15 @@ node tools/rubric.js        # the tests, counted against M01 to A08
   left in the starter ends up in every app.
 - After changing the starter, re-read `references/app.md` and
   `references/app-advanced.md`: they name its files and functions.
+- Nothing in the starter may name a role. The app's builder renames the roles
+  in `config.js`; pages use `'top'` for the first one, and the core's tests
+  bring their own.
+- The `.cmd` files are for people who do not use a terminal. They keep
+  Windows line endings (`.gitattributes` stops git from changing them), and
+  a test checks that.
+- The unit tests for the check set `sys.dont_write_bytecode`, so running them
+  leaves no `__pycache__` in the skill folder, which is copied whole when the
+  skill is installed.
 
 ## Changing the check
 
@@ -100,6 +109,13 @@ claude plugin eval . --scaffold --allow-tools Write,Edit,Bash
 
 These are real, billed model runs. Results land in `evals/results/`, which is
 ignored by git.
+
+When you run a case by hand instead (give an agent the prompt and the path of
+the skill), point the agent at a copy of the skill folder with `evals/` left
+out. The graders' file names alone say what is being marked, and an agent
+that lists the skill folder sees them. Ask the run for a list of everything
+in the skill that was wrong, unclear or worked around: that list has been
+worth more than the score.
 
 ## Reporting a problem
 
