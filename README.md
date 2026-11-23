@@ -103,7 +103,7 @@ Read these with some care:
 
 ## Related projects
 
-- [Claude SEO](https://github.com/AgriciDaniel/claude-seo) by Agrici Daniel (MIT): a free SEO audit plugin for Claude Code. This skill only covers the SEO basics of a new site (title, description, share picture, one main heading). When your site is online and you want a full audit of technical SEO, content, structured data and AI search, use Claude SEO. It is a separate project; none of its code is included here.
+- [Claude SEO](https://github.com/AgriciDaniel/claude-seo) by Agrici Daniel (MIT): a free SEO audit plugin for Claude Code. This skill covers the SEO basics of a new site (title, description, share picture, one main heading, and a short list of next steps once the site is online). For a full audit of technical SEO, content, structured data and AI search, the skill tells the agent to run Claude SEO when it is installed. The thresholds in the skill's search section follow Claude SEO's page checks, and this project's landing page was checked with it. It is a separate project; none of its code is included here.
 - [launch-kit](https://github.com/mr-Imran/launch-kit), from the same author as this skill: gets a GitHub repository ready to launch and scores it from 0 to 100.
 
 ## Contributing

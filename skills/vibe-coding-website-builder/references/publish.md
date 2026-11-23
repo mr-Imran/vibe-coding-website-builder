@@ -12,6 +12,7 @@ build is finished and the next step is publishing.
 5. Right after publishing
 6. Changing the site later
 7. Their own address (a domain)
+8. Being found in search, and a full SEO audit with Claude SEO
 
 Facts about hosts were checked on 2026-11-23. Hosts change their menus and
 limits often. When you have web access, open the host's own documentation
@@ -153,7 +154,9 @@ Ask the owner for the address, then:
    now.
 2. **Fill in the full addresses.** `og:image` (and `og:url` if present) must
    start with `https://` and the real address, or the share picture will not
-   appear in chat apps. This means publishing once more. Tell the owner why.
+   appear in chat apps. Add the canonical line and the other items in
+   section 8 at the same time. This means publishing once more. Tell the
+   owner why.
 3. **Ask them to open it on their phone**, on mobile data if they can, and
    tell you anything that looks wrong.
 4. **Test each add-on for real**: send a message through the form and find it
@@ -166,7 +169,7 @@ Ask the owner for the address, then:
 Search engines find a new site on their own within days to weeks, sooner if
 other sites link to it. Do not promise a position in search results. The
 free, effective steps are the owner's: add the address to their Google
-Business Profile and their social profiles.
+Business Profile and their social profiles. Section 8 has the rest.
 
 ## 6. Changing the site later
 
@@ -208,3 +211,78 @@ hosts.
 
 Email at their domain (`hello@sugarandthyme.co.uk`) is a separate paid
 service from an email provider. Mention it only if they ask.
+
+## 8. Being found in search, and a full SEO audit with Claude SEO
+
+The check covers what every page needs before it goes up: a title, a
+description, one main heading, a share picture. These are the next things,
+and most of them need the site's real address, so they belong here, after
+publishing. In the owner's words this is "being found on Google"; say "SEO"
+only if they do.
+
+The thresholds below follow the page checks of
+[Claude SEO](https://github.com/AgriciDaniel/claude-seo) by Agrici Daniel
+(MIT), a free SEO audit plugin for Claude Code. Facts about search engines
+were checked on 2026-11-23.
+
+**On every page**
+
+- **Title** under about 60 characters, **description** between about 120 and
+  160. Longer ones are cut off in results; that is a display limit, not a
+  rule. The description says something the title does not: a description that
+  repeats the title and ends on "Contact us today!" reads as machine-made.
+- **A canonical line** with the page's full address, so that copies of the
+  page (with or without `www`, with tracking codes on the end) count as one:
+  `<link rel="canonical" href="https://the-real-address/page.html">`.
+  `og:url` carries the same address.
+- **The first picture on the page is not lazy loaded.** It is usually the
+  largest thing on the first screen, and `loading="lazy"` delays it. Lazy
+  loading is for pictures further down.
+- **The first paragraph says what this is, where, and for whom**, in full
+  sentences, with the name in it. Search engines and AI assistants quote
+  pages that answer plainly. No file such as `llms.txt` is needed for that;
+  the large AI search services have not said they use it.
+
+**Once for the site**
+
+- **A sitemap** when there is more than one page: `sitemap.xml` in the site
+  folder, listing each page's full address. The owner submits it in Google
+  Search Console, which needs their Google account and a verification step
+  that you can walk them through.
+- **`robots.txt` only if there is something to keep out**, and it only counts
+  at the very top of an address. On a sub-address such as
+  `name.github.io/project/` it is ignored. A simple site needs none: with no
+  file, everything may be read, AI search crawlers included.
+- **A block of structured data** (JSON-LD) that says what the site is, using
+  only facts the owner gave: `LocalBusiness` for a business with an address
+  and opening hours, `Person` for a portfolio, `Organization` otherwise.
+  Addresses inside it are full addresses. Never add review or rating markup
+  for reviews that are not real and shown on the page. Question-and-answer
+  (`FAQPage`) and how-to markup no longer produce a special result on Google
+  (retired in May 2026 and September 2023), so add them only if they help
+  some other reader.
+
+**Outside the site**, which matters more than anything in the files: for a
+local business, a complete Google Business Profile with the site's address;
+the address on every social profile; links from real places that mention the
+business. These are the owner's to do.
+
+### A full audit with Claude SEO
+
+When the site is online and the owner wants more than the basics, use Claude
+SEO if it is installed in this agent (its commands start with `/seo`):
+
+```text
+/seo page https://the-real-address/     one page, in depth
+/seo audit https://the-real-address/    the whole site
+```
+
+Read its findings with this site in mind before acting on them. It is built
+for sites of every size, so some advice will not fit a three-page site on a
+free host (response headers the host does not let you set, tools that need
+paid data). Fix what applies, in the site's plain files, and tell the owner
+in plain words what changed and what you left.
+
+If it is not installed, mention it once as a free, optional tool and give the
+owner its page. Installing a plugin changes their setup and downloads a
+separate program, so it is their decision; do not install it unasked.

@@ -11,9 +11,9 @@ description: >-
   someone asks for a website, landing page or portfolio and gives any sign
   they are not a programmer ("I don't know coding", "I'm not technical", "I
   made this with AI", vibe coding), asks whether an AI-built site is safe or
-  ready to publish, asks how to get a site online or connect a domain, or
-  wants a form, payment button or booking added to a simple site, even if
-  they never say "vibe".
+  ready to publish, asks how to get a site online, connect a domain or be
+  found on Google, or wants a form, payment button or booking added to a
+  simple site, even if they never say "vibe".
 license: MIT
 compatibility: >-
   The bundled check needs Python 3.8+ (standard library only). Without Python,
@@ -218,6 +218,10 @@ steps for their browser, name the exact folder to use, and after they send you
 the address, check the live site and finish the items that need the real
 address (the share picture, form tests).
 
+Once it is online, the last section of `references/publish.md` covers being
+found in search: the few things worth adding to a simple site, and how to run
+a full audit with the Claude SEO plugin when it is installed.
+
 ## Checking a site that already exists
 
 For "is my site ok?", "check this before I publish", "I made this with AI".
@@ -288,6 +292,7 @@ People often want one piece. Do that piece well and skip the rest.
 | "How do I put it online?" | The check first, then step 6 | publish |
 | "Add a contact form / payment / booking" | Step 3 for that item, then the check | addons |
 | "I want my own address" | The domain section | publish |
+| "How do I get found on Google?" / "do the SEO" | The search section on the live site; Claude SEO's audit if it is installed | publish, section 8 |
 | "Change the text / colours / photo" | The change, then the check on what you touched | build if the layout changes |
 
 For a small change, answer briefly: what changed, how to see it, and that the
@@ -303,6 +308,6 @@ site has to be published again for visitors to see it if it is already online.
 
 - `references/build.md`: the folder, page content, yellow notes, the look, the technical baseline, pictures, legal basics, looking at the result.
 - `references/addons.md`: what may and may not be in a page, chat links, forms, payments, bookings, newsletter, map, visitor statistics, and what a simple site cannot do.
-- `references/publish.md`: choosing a host, click-by-click steps, checks after publishing, changing the site later, the owner's own address.
+- `references/publish.md`: choosing a host, click-by-click steps, checks after publishing, changing the site later, the owner's own address, being found in search and a full audit with Claude SEO.
 - `references/checklist.md`: the same checks as the script, for doing by hand when there is no Python.
 - `assets/page-skeleton.html`: the starting point for every page, with the lines the check looks for and the yellow-note styles.
