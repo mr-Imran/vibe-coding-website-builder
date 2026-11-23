@@ -20,13 +20,15 @@ import { check } from './validate.js';
 //       room:   'eq',                                             // the short form: compared as text, not checked
 //     },
 //     sortable: ['day', 'title', 'created_at'],
-//     sorts: { timetable: ['day', 'starts_at', 'room'] },        // a named order over several columns: ?sort=timetable
+//     sorts: { timetable: ['day', 'starts_at', 'room'],          // a named order over several columns: ?sort=timetable
+//              waiting_first: ['approved', '-created_at'] },     // '-' turns one column against the others
 //     defaultSort: '-created_at',
 //     query: ctx.query,                                          // q, sort, page, page_size, and filter values
 //     sums: {                                                    // figures over everything that matches, not just this page
 //       spent: 'price_cents',                                    //   a column, added up
 //       open:  { count: 'remaining > 0 AND active = 1' },        //   how many rows meet a condition you wrote
 //       owed:  { sql: 'price_cents - paid_cents' },              //   an expression you wrote, added up
+//       upcoming: { count: 'starts_at > ?', params: [at] },      //   a value of yours goes in params, never into the text
 //     },
 //   })
 //   -> { rows, total, page, pageSize, pages, sums: { spent, open, owed } }
@@ -82,9 +84,14 @@ export function listQuery(db, { table, columns = ['*'], where = [], search = nul
   if (sort.startsWith('-')) { dir = 'DESC'; sort = sort.slice(1); }
   const known = (name) => sortable.includes(name) || Object.hasOwn(sorts, name) || name === tiebreak;
   if (!known(sort)) { sort = defaultSort.replace(/^-/, ''); dir = defaultSort.startsWith('-') ? 'DESC' : 'ASC'; }
+  // In a named order, a column written '-created_at' runs against the others:
+  // sorts: { waiting_first: ['approved', '-created_at'] } is "not yet approved
+  // first, and within each group the newest first". Asked for as
+  // ?sort=-waiting_first, every column turns round.
   const orderColumns = Object.hasOwn(sorts, sort) ? [...sorts[sort]] : [sort];
-  if (tiebreak && !orderColumns.includes(tiebreak)) orderColumns.push(tiebreak);
-  const orderSql = orderColumns.map((c) => `${ident(c)} ${dir}`).join(', ');
+  if (tiebreak && !orderColumns.some((c) => c.replace(/^-/, '') === tiebreak)) orderColumns.push(tiebreak);
+  const other = dir === 'ASC' ? 'DESC' : 'ASC';
+  const orderSql = orderColumns.map((c) => (c.startsWith('-') ? `${ident(c.slice(1))} ${other}` : `${ident(c)} ${dir}`)).join(', ');
 
   const pageSize = Math.min(100, Math.max(1, Number.parseInt(query.page_size, 10) || 20));
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
@@ -127,7 +134,11 @@ export function listQuery(db, { table, columns = ['*'], where = [], search = nul
 //
 // The row is found by its id column. For a table keyed by something else (a
 // profile keyed by user_id), say so: { key: 'user_id' }.
-export function updateVersioned(db, table, id, expectedVersion, changes, allowedColumns, { key = 'id' } = {}) {
+//
+// updated_at is stamped with the real clock unless you hand over the moment:
+// { at: config.now().toISOString() }. Do that when a rule or a list reads
+// updated_at, so that it agrees with the app's other times under a test clock.
+export function updateVersioned(db, table, id, expectedVersion, changes, allowedColumns, { key = 'id', at = null } = {}) {
   const v = expectedVersion;
   const whole = (typeof v === 'number' && Number.isInteger(v) && v >= 1) || (typeof v === 'string' && /^[1-9][0-9]*$/.test(v.trim()));
   if (!whole) {
@@ -137,7 +148,7 @@ export function updateVersioned(db, table, id, expectedVersion, changes, allowed
   const keys = Object.keys(changes).filter((k) => allowedColumns.includes(k));
   const sets = keys.map((k) => `${ident(k)} = ?`);
   const info = db.prepare(`UPDATE ${ident(table)} SET ${[...sets, 'version = version + 1', 'updated_at = ?'].join(', ')} WHERE ${ident(key)} = ? AND version = ?`)
-    .run(...keys.map((k) => changes[k]), now(), id, Number(v));
+    .run(...keys.map((k) => changes[k]), at instanceof Date ? at.toISOString() : (at || now()), id, Number(v));
   const current = db.prepare(`SELECT * FROM ${ident(table)} WHERE ${ident(key)} = ?`).get(id);
   if (!current) throw notFound();
   if (info.changes === 0) {

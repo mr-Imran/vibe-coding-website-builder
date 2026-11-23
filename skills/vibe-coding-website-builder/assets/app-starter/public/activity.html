@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Activity - My app</title>
+  <meta name="description" content="Who did what in My app, and what was refused.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="bar">
+    <a class="brand" href="/">My app</a>
+    <nav aria-label="Main" id="nav"></nav>
+    <div class="who">
+      <span id="who-name"></span>
+      <button type="button" class="button quiet" id="sign-out">Sign out</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1>Activity</h1>
+    <p>Sign-ins, changes to accounts, and attempts the app refused: a route someone's role may not use, a record that is not theirs, a rule that said no.</p>
+
+    <form id="filters" class="filters" role="search" novalidate>
+      <div class="field">
+        <label for="q">Search</label>
+        <input id="q" name="q" type="search" autocomplete="off" maxlength="100" placeholder="A name, an email or a word">
+      </div>
+      <div class="field">
+        <label for="from">From</label>
+        <input id="from" name="from" type="date">
+      </div>
+      <div class="field">
+        <label for="sort">Order</label>
+        <select id="sort" name="sort">
+          <option value="-at">Newest first</option>
+          <option value="at">Oldest first</option>
+          <option value="user_name">By person</option>
+        </select>
+      </div>
+      <!-- A tick box with its label: class="check" on the label, the box inside it. -->
+      <label class="check" for="refused"><input id="refused" name="refused" type="checkbox" value="1"> Refused attempts only</label>
+    </form>
+    <p id="refused-count" class="hint"></p>
+
+    <div class="table-scroll">
+      <table class="stack">
+        <caption class="visually-hidden">What happened, newest first</caption>
+        <thead>
+          <tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Details</th></tr>
+        </thead>
+        <tbody id="lines"></tbody>
+      </table>
+    </div>
+    <div id="pager" class="pager"></div>
+
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+
+  <script type="module" src="/js/activity.js"></script>
+</body>
+</html>

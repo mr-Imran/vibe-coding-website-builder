@@ -42,6 +42,7 @@ See [RULES.md](RULES.md).
 node --test                    # every test
 node tools/rubric.js --write   # the tests, counted against each requirement
 node tools/look.js             # every screen as each role, in a browser without a window (needs Chrome or Edge)
+node tools/journey.js          # the main journey, clicked and typed in the same browser
 ```
 
 REPLACE: the result of the last run, with its date, and what the tests do not cover.

@@ -59,7 +59,7 @@ export function setupFixture({ app, db, auth, hub }) {
         notes: 'eq',                                    // the short form: any text, compared as it is
       },
       sortable: ['title', 'price', 'created_at'], defaultSort: '-created_at',
-      sorts: { by_status: ['status', 'title'] },
+      sorts: { by_status: ['status', 'title'], done_first_dearest: ['status', '-price'] },
       sums: { priceTotal: 'price', openCount: { count: 'status = ?', params: ['open'] }, withTax: { sql: 'price * ?', params: [1.2] } },
     });
     return { ...list, priceTotal: list.sums.priceTotal };

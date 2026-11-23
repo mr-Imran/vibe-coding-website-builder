@@ -121,6 +121,8 @@ function realDay(day) {
 // For ids in the address: /api/things/:id
 export function idParam(value, label = 'id') {
   const n = Number(value);
-  if (!Number.isInteger(n) || n < 1) throw invalid({ [label]: 'Not a valid id.' }, 'Not found.');
+  // isSafeInteger, not isInteger: thirty nines in a row is "a whole number" to
+  // JavaScript (1e+30), and no record has that id.
+  if (!Number.isSafeInteger(n) || n < 1 || !/^[0-9]+$/.test(String(value))) throw invalid({ [label]: 'Not a valid id.' }, 'Not found.');
   return n;
 }

@@ -3,7 +3,7 @@
 // own modules and deployment, so their tests live in your module test files.
 
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,6 +16,9 @@ import { check } from '../core/validate.js';
 import { CORE, setupFixture } from './fixture.js';
 import { removeFolder, startApp } from './helpers.js';
 import { giveBack, takeOne, updateVersioned } from '../core/records.js';
+import { guardRecord } from '../core/policy.js';
+import { idParam } from '../core/validate.js';
+import net from 'node:net';
 
 describe('core', () => {
   let t;
@@ -722,15 +725,216 @@ describe('core', () => {
     } finally { tool.done(); fs.rmSync(copy, { force: true }); }
   });
 
-  test('core M07 the tool that looks at every screen in a browser is in place', () => {
-    const look = fs.readFileSync(path.join(starter, 'tools', 'look.js'), 'utf8');
-    assert.match(look, /history\.back\(\)/, 'it presses Back after signing out');
-    assert.match(look, /seed\.js/, 'it signs in as the example accounts');
-    assert.equal(spawnSync(process.execPath, ['--check', path.join('tools', 'look.js')], { cwd: starter }).status, 0);
-    assert.match(fs.readFileSync(path.join(starter, '.gitignore'), 'utf8'), /^look\/$/m, 'its pictures are not committed');
+  test('core M07 the tools that look at every screen and click through the app in a browser are in place', async () => {
+    const tools = path.join(starter, 'tools');
+    for (const name of ['browser.js', 'look.js', 'journey.js']) {
+      assert.equal(spawnSync(process.execPath, ['--check', path.join('tools', name)], { cwd: starter }).status, 0, `tools/${name} parses`);
+    }
+    const look = fs.readFileSync(path.join(tools, 'look.js'), 'utf8');
+    assert.match(look, /app\.signOut\(\)[\s\S]*app\.back\(\)/, 'look.js signs out and presses Back');
+    const journey = fs.readFileSync(path.join(tools, 'journey.js'), 'utf8');
+    assert.ok((journey.match(/app\.step\(/g) || []).length >= 3, 'journey.js goes through the app in steps');
+    assert.match(journey, /app\.(press|fillIn)\(/, 'and presses or types something');
+    assert.match(fs.readFileSync(path.join(tools, 'browser.js'), 'utf8'), /seed\.js/, 'both sign in as the example accounts');
+    // Pictures go outside the project, so they are never uploaded or committed with it.
+    const { picturesFolder, root } = await import('../tools/browser.js');
+    for (const kind of ['look', 'journey']) {
+      const fromProject = path.relative(root, picturesFolder(kind));          // '..\..\temp\...', or another drive altogether
+      assert.ok(fromProject.startsWith('..') || path.isAbsolute(fromProject), `${kind} pictures are saved outside the project folder`);
+    }
+    assert.match(fs.readFileSync(path.join(starter, '.gitignore'), 'utf8'), /^look\/$/m, 'and a look/ folder made with --out is not committed');
+  });
+
+  // ---------------------------------------------------------------- starting up
+
+  const freePort = () => new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.listen(0, '127.0.0.1', () => { const { port } = probe.address(); probe.close(() => resolve(port)); });
+  });
+  // Start server.js as its own program and collect what it prints until it says it is running, or stops.
+  function startProgram(env) {
+    const child = spawn(process.execPath, ['server.js'], { cwd: starter, env: { ...process.env, NODE_ENV: '', ADMIN_EMAIL: '', ADMIN_PASSWORD: '', HOST: '127.0.0.1', ...env } });
+    let printed = '';
+    const ready = new Promise((resolve) => {
+      const read = (chunk) => { printed += chunk; if (/is running:/.test(printed)) setTimeout(() => resolve({ code: null, printed }), 300); };
+      child.stdout.on('data', read);
+      child.stderr.on('data', read);
+      child.on('exit', (code) => resolve({ code, printed }));
+    });
+    return { child, ready, text: () => printed };
+  }
+
+  test('core M06 starting the app a second time says it is already running, in a sentence, and does not crash', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'start-'));
+    const port = String(await freePort());
+    const first = startProgram({ DATA_DIR: dir, PORT: port });
+    try {
+      assert.equal((await first.ready).code, null, first.text());
+      const second = startProgram({ DATA_DIR: dir, PORT: port });
+      const out = await second.ready;
+      assert.equal(out.code, 1);
+      assert.match(out.printed, /probably running already/);
+      assert.match(out.printed, new RegExp(`http://localhost:${port}`));
+      assert.ok(!/EADDRINUSE|node:events|^\s+at /m.test(out.printed), `no raw error for the owner to read:\n${out.printed}`);
+      // The first one is unharmed.
+      assert.equal((await fetch(`http://127.0.0.1:${port}/api/health`)).status, 200);
+    } finally {
+      first.child.kill();
+      await new Promise((resolve) => { first.child.on('exit', resolve); });
+      removeFolder(dir);
+    }
+  });
+
+  test('core M03 an app with no accounts yet says so, and does not let the first account be an ordinary one', async () => {
+    const empty = await startApp({ config: CORE });
+    try {
+      const visitor = empty.client();
+      assert.deepEqual((await visitor.get('/api/auth/state')).body, { signup: true, firstAccountNeeded: true });
+      const tried = await visitor.post('/api/auth/signup', { email: 'early@test.local', name: 'Early', password: 'long enough pw' });
+      assert.equal(tried.status, 409);
+      assert.equal(tried.body.error.code, 'no_accounts');
+      assert.equal(empty.db.prepare('SELECT COUNT(*) AS n FROM users').get().n, 0, 'nobody was created');
+      // Once the owner has made the first account, signing up works and gives the lowest role.
+      await empty.auth.createUser({ email: 'owner@test.local', name: 'Owner', password: 'a long password', role: 'admin' });
+      assert.equal((await visitor.get('/api/auth/state')).body.firstAccountNeeded, false);
+      const later = await empty.client().post('/api/auth/signup', { email: 'later@test.local', name: 'Later', password: 'long enough pw' });
+      assert.equal(later.status, 201);
+      assert.equal(later.body.user.role, 'member');
+    } finally { await empty.stop(); }
+    const closed = await startApp({ config: { ...CORE, allowSignup: false } });
+    try { assert.equal((await closed.client().get('/api/auth/state')).body.signup, false); } finally { await closed.stop(); }
+
+    // The window the owner started it in says what to do, and the sign-in page has the notice.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'start-'));
+    const program = startProgram({ DATA_DIR: dir, PORT: String(await freePort()) });
+    try {
+      const out = await program.ready;
+      assert.match(out.printed, /no accounts yet/);
+      assert.match(out.printed, /add-account\.cmd/);
+      assert.match(out.printed, /node tools\/add-user\.js/);
+    } finally {
+      program.child.kill();
+      await new Promise((resolve) => { program.child.on('exit', resolve); });
+      removeFolder(dir);
+    }
+    const page = fs.readFileSync(path.join(starter, 'public', 'login.html'), 'utf8');
+    assert.match(page, /id="first-account" hidden/);
+    assert.match(fs.readFileSync(path.join(starter, 'public', 'js', 'login.js'), 'utf8'), /first-account'\)\.hidden = !state\.firstAccountNeeded/);
+  });
+
+  // ---------------------------------------------------------------- refusals on record
+
+  test('core A03 a refusal is logged with the number of the record, also when the record is not keyed by id', () => {
+    const ctx = { db: t.db, user: { id: ben.id, role: 'member' }, ip: 'test' };
+    const profile = { user_id: ann.id, nickname: 'Annie' };
+    const last = () => t.db.prepare("SELECT * FROM audit_log WHERE action = 'access.denied' ORDER BY id DESC LIMIT 1").get();
+    const rules = { entity: 'profile', key: 'user_id', read: (u, r) => r.user_id === u.id, write: (u, r) => r.user_id === u.id };
+    assert.throws(() => guardRecord(ctx, profile, rules, 'write'), /Not found/);
+    assert.equal(last().entity, 'profile');
+    assert.equal(last().entity_id, String(ann.id));
+    assert.equal(last().user_id, ben.id);
+    // Without a key and without an id column, the number is left empty, never the word "undefined".
+    assert.throws(() => guardRecord(ctx, profile, { ...rules, key: undefined }, 'read'), /Not found/);
+    assert.equal(last().entity_id, null);
+    // The owner is let through and gets the record back.
+    assert.equal(guardRecord({ ...ctx, user: { id: ann.id, role: 'member' } }, profile, rules, 'write'), profile);
+  });
+
+  test('core M06 a record number that no record could have is refused as a number, not looked up', async () => {
+    for (const bad of ['9'.repeat(30), '1e3', '0', '-4', '2.5', '0x10', ' 7', 'seven', '']) {
+      assert.throws(() => idParam(bad), /Not found/, `"${bad}"`);
+    }
+    assert.equal(idParam('7'), 7);
+    assert.equal(idParam(12), 12);
+    assert.equal((await ann.get(`/api/_t/things/${'9'.repeat(30)}`)).status, 422);
+  });
+
+  test('core M04 an edit can be stamped with the business clock, so updated_at agrees with the app\'s other times', () => {
+    t.db.exec('CREATE TABLE t_stamped (id INTEGER PRIMARY KEY, title TEXT, version INTEGER NOT NULL DEFAULT 1, updated_at TEXT)');
+    t.db.prepare("INSERT INTO t_stamped (id, title) VALUES (1, 'a')").run();
+    const march = new Date('2026-03-02T08:55:00Z');
+    assert.equal(updateVersioned(t.db, 't_stamped', 1, 1, { title: 'b' }, ['title'], { at: march.toISOString() }).updated_at, '2026-03-02T08:55:00.000Z');
+    assert.equal(updateVersioned(t.db, 't_stamped', 1, 2, { title: 'c' }, ['title'], { at: march }).updated_at, '2026-03-02T08:55:00.000Z');
+    const real = updateVersioned(t.db, 't_stamped', 1, 3, { title: 'd' }, ['title']).updated_at;
+    assert.ok(Math.abs(Date.parse(real) - Date.now()) < 60_000, 'the real clock when no moment is given');
+    t.db.exec('DROP TABLE t_stamped');
+  });
+
+  test('core M05 in a named order one column can run against the others', async () => {
+    const u = await t.user('orders@test.local');
+    for (const [title, price, status] of [['Kettle', 10, 'open'], ['Lamp', 20, 'done'], ['Mug', 5, 'open'], ['Vase', 30, 'done']]) await u.post('/api/_t/things', { title, price, status });
+    const titles = async (sort) => (await u.get(`/api/_t/things?sort=${sort}`)).body.rows.map((r) => r.title);
+    assert.deepEqual(await titles('done_first_dearest'), ['Vase', 'Lamp', 'Kettle', 'Mug'], 'done before open, and within each the dearest first');
+    assert.deepEqual(await titles('-done_first_dearest'), ['Mug', 'Kettle', 'Lamp', 'Vase'], 'asked for backwards, every column turns round');
+  });
+
+  test('core A03 the first role can see what happened and what was refused, including rules that said no; nobody else can', async () => {
+    const s = await startApp({ setup: setupFixture, config: { roles: ['staff', 'member'], defaultRole: 'member', allowSignup: true } });
+    try {
+      const staff = await s.user('staff@test.local', 'staff');
+      const member = await s.user('member@test.local');
+      const other = await s.user('other@test.local');
+      const theirs = (await other.post('/api/_t/things', { title: 'Private' })).body.id;
+
+      assert.equal((await member.get('/api/activity')).status, 403);                               // a route their role may not use
+      assert.equal((await member.get(`/api/_t/things/${theirs}`)).status, 404);                     // a record that is not theirs
+      assert.equal((await member.post('/api/_t/refuse', { why: 'limit' })).status, 409);            // a rule that said no
+      assert.equal((await member.post('/api/_t/refuse', { why: 'approval' })).status, 403);
+      assert.equal((await s.client().post('/api/auth/login', { email: 'member@test.local', password: 'wrong password' })).status, 401);
+
+      const all = await staff.get('/api/activity?page_size=100');
+      assert.equal(all.status, 200);
+      const refused = await staff.get('/api/activity?refused=1&sort=at&page_size=100');
+      assert.deepEqual(refused.body.rows.map((r) => r.action), ['auth.denied', 'access.denied', 'rule.refused', 'rule.refused', 'auth.login_failed']);
+      assert.ok(refused.body.rows.every((r) => r.refused === 1));
+      assert.ok(all.body.total > refused.body.total, 'sign-ins are listed too, and are not refusals');
+      const rules = refused.body.rows.filter((r) => r.action === 'rule.refused');
+      assert.deepEqual(rules.map((r) => r.detail), ['max_open: POST /api/_t/refuse', 'not_approved: POST /api/_t/refuse'], 'the rule is named');
+      assert.ok(rules.every((r) => r.user_email === 'member@test.local' && r.user_name === 'member'), 'and so is the person');
+      assert.equal(refused.body.rows[1].entity_id, String(theirs));
+      assert.equal(all.body.sums.refused, 5);
+      assert.equal(all.body.sums.refusedThisWeek, 5);
+      // An old refusal is listed but not counted in "the last 7 days".
+      s.db.prepare("INSERT INTO audit_log (at, action, detail) VALUES ('2020-01-01T00:00:00.000Z', 'rule.refused', 'old: POST /api/x')").run();
+      const later = await staff.get('/api/activity');
+      assert.equal(later.body.sums.refused, 6);
+      assert.equal(later.body.sums.refusedThisWeek, 5);
+      assert.equal((await staff.get('/api/activity?q=not_approved')).body.total, 1);
+      assert.equal((await staff.get('/api/activity?refused=perhaps')).status, 422);
+      assert.ok(!('ip' in all.body.rows[0]), 'addresses of devices are not handed to the screen');
+      // A refusal that does not name a rule is not logged: the guide says so.
+      const before = s.db.prepare('SELECT COUNT(*) AS n FROM audit_log').get().n;
+      assert.equal((await member.patch(`/api/_t/things/${(await member.post('/api/_t/things', { title: 'Mine' })).body.id}`, { title: 'x', version: 9 })).status, 409);
+      assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM audit_log').get().n, before);
+      // The screen is in the menu for the first role only.
+      assert.match(fs.readFileSync(path.join(starter, 'public', 'js', 'shell.js'), 'utf8'), /href: '\/activity'[^\n]*roles: 'top'/);
+      assert.match(fs.readFileSync(path.join(starter, 'public', 'js', 'activity.js'), 'utf8'), /startPage\('top'\)/);
+    } finally { await s.stop(); }
   });
 
   // ---------------------------------------------------------------- M07 pages
+
+  // A field has a label when a <label> names its id in for="..." (wherever
+  // that attribute stands among the others), or when the field sits inside
+  // its <label>. Fields nobody sees or types into need none.
+  function hasLabel(html, input) {
+    if (/\btype="(hidden|submit|button|reset|image)"/.test(input)) return true;
+    const id = /\bid="([^"]+)"/.exec(input);
+    if (id && new RegExp(`<label\\b[^>]*\\bfor="${id[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`).test(html)) return true;
+    const at = html.indexOf(input);
+    return html.lastIndexOf('<label', at) > html.lastIndexOf('</label>', at);
+  }
+
+  test('core M07 the label check knows a label however it is written, and still catches a field without one', () => {
+    const field = '<input id="free" name="free" type="checkbox">';
+    assert.ok(hasLabel(`<label for="free">Free</label>${field}`, field));
+    assert.ok(hasLabel(`<label class="wide" data-x="1" for="free">Free</label><div>${field}</div>`, field), 'for="..." after other attributes');
+    assert.ok(hasLabel(`<label>${field} Free</label>`, field), 'a field inside its label');
+    assert.ok(hasLabel('<input type="hidden" name="token">', '<input type="hidden" name="token">'));
+    assert.ok(!hasLabel(`<label for="other">Other</label>${field}`, field));
+    assert.ok(!hasLabel(`<label>Earlier</label><p>${field}</p>`, field), 'a label that closed before the field is not its label');
+    assert.ok(!hasLabel('<input name="q" type="search">', '<input name="q" type="search">'));
+  });
 
   test('core M07 every page is set up for phones and screen readers', () => {
     const dir = path.resolve(import.meta.dirname, '../public');
@@ -742,8 +946,7 @@ describe('core', () => {
       assert.equal((html.match(/<h1[\s>]/g) || []).length, 1, `${name}: one main heading`);
       assert.match(html, /<main[\s>]/, `${name}: main landmark`);
       for (const input of html.match(/<(input|select|textarea)\b[^>]*>/g) || []) {
-        const id = /\bid="([^"]+)"/.exec(input);
-        assert.ok(id && html.includes(`<label for="${id[1]}"`), `${name}: a label for ${input}`);
+        assert.ok(hasLabel(html, input), `${name}: no label for ${input}. Give the field an id and a <label for="that id">, or put the field inside its <label>.`);
       }
       assert.ok(!/<script(?![^>]*\bsrc=)/.test(html), `${name}: no inline scripts (the security policy blocks them)`);
       assert.ok(!/<style[\s>]/.test(html) && !/\sstyle\s*=/.test(html), `${name}: no styles written into the page (the security policy ignores them, silently; use a class in app.css)`);

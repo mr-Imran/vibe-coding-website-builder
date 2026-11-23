@@ -47,6 +47,7 @@ cd skills/vibe-coding-website-builder/assets/app-starter
 node --test                 # every test must pass
 node tools/rubric.js        # the tests, counted against M01 to A08
 node tools/look.js          # after touching a page, a page script or app.css: every screen in a browser
+node tools/journey.js       # and the starter's own screens, clicked through
 ```
 
 - It needs Node.js 22.13 or newer and has no dependencies. Keep it that way:
@@ -71,6 +72,11 @@ node tools/look.js          # after touching a page, a page script or app.css: e
   signing out. Two things keep that true (pages served `no-store`, and the
   reload in `api.js` when a page is restored from the browser's memory);
   `tools/look.js` checks the result in a real browser. Do not remove either.
+- `tools/journey.js` in the starter goes through the starter's own screens
+  (People, Activity, sign-in). When one of those screens changes, change
+  its steps too; an app's builder replaces them with the app's journey.
+- What the owner reads in the start window is a sentence, never a stack
+  trace: a second start, and a start with no accounts, each have a test.
 - The `.cmd` files are for people who do not use a terminal. They keep
   Windows line endings (`.gitattributes` stops git from changing them), and
   a test checks that.

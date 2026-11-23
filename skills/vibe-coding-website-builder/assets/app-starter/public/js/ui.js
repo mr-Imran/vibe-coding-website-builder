@@ -24,7 +24,9 @@ import { api, el, fill } from './api.js';
 // The form's fields are the route's own words: a search box named q, a
 // <select name="sort"> whose values are the route's sortable names ("-day"
 // for newest first), and one field per filter. Changing any of them loads
-// page 1 again; typing in a search box waits a moment first.
+// page 1 again; typing in a search box waits a moment first. The same names
+// in the page's own address (/classes?status=open) set the fields before the
+// first load, so another page can link to the list already narrowed.
 export function createList({ url, body, row, empty, filters = null, pager = null, loaded = null }) {
   let page = 1;
   let latest = 0;
@@ -41,6 +43,17 @@ export function createList({ url, body, row, empty, filters = null, pager = null
   }
   // The choices the page starts with. Anything else means the person narrowed the list.
   const untouched = params().toString();
+  // A link can open the list already narrowed: /members?approved=0 sets the
+  // form's "approved" field before the first load, so a figure on the home
+  // page ("1 waiting for approval") can lead straight to those rows.
+  if (filters) {
+    for (const [name, value] of new URLSearchParams(location.search)) {
+      const field = filters.elements[name];
+      if (!field || field.length !== undefined && field.tagName !== 'SELECT') continue;
+      if (field.type === 'checkbox') field.checked = value === field.value;
+      else field.value = value;
+    }
+  }
 
   // One line in place of the rows, whatever the list is made of.
   function message(...content) {

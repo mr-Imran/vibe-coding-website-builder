@@ -145,6 +145,8 @@ export function createAuth({ db, config }) {
     }
   }
 
+  const noAccountsYet = () => db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0;
+
   function recentFailures(key) {
     return db.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND at > ?')
       .get(key, Date.now() - LOGIN_WINDOW_MS).n;
@@ -187,6 +189,9 @@ export function createAuth({ db, config }) {
   function registerRoutes(app) {
     app.post('/api/auth/signup', { public: true }, async (ctx) => {
       if (!config.allowSignup) throw forbidden('New accounts are created by an administrator.');
+      // An account made here gets the lowest role. If it were the first one,
+      // the app would have a user and nobody able to manage it or approve them.
+      if (noAccountsYet()) throw new HttpError(409, 'no_accounts', 'This app has no accounts yet. Its owner creates the first one (add-account), and then others can sign up here.');
       const input = check(await ctx.body(), SIGNUP);
       const id = await createUser(input);                       // always the lowest role
       const csrf = startSession(ctx.res, id);
@@ -196,6 +201,10 @@ export function createAuth({ db, config }) {
     });
 
     app.post('/api/auth/login', { public: true }, login);
+
+    // What the sign-in page needs to know before anyone has signed in: may
+    // people create their own account here, and is there any account at all.
+    app.get('/api/auth/state', { public: true }, () => ({ signup: Boolean(config.allowSignup), firstAccountNeeded: noAccountsYet() }));
 
     app.post('/api/auth/logout', requireUser, (ctx) => {
       db.prepare('DELETE FROM sessions WHERE id = ?').run(ctx.session.id);

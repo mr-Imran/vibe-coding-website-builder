@@ -118,7 +118,11 @@ of the user and the record). Lists are filtered by the same rule in the SQL
 `where`, never by loading everything and hiding rows in the page. `check()`
 already refuses fields that are not in the schema, which is what stops a
 request from carrying `owner_id` or `role`. Refusals are written to
-`audit_log`; give the administrator a screen that shows them.
+`audit_log`, and the starter's Activity screen shows them to the first
+role: nothing to build, but read "Activity" in section 4 of
+`references/app.md` for which refusals are logged (a rule's refusal only
+when it names the rule). For a record that is not keyed by `id`, put
+`key: 'user_id'` in its rules so the log names the right record.
 
 In a route that changes a record, the order is: read the id, load the
 record, `guardRecord()`, and only then read and check the body. Checking the
@@ -146,7 +150,11 @@ that every signed-in person may look at (a class, a machine) is not a
 restricted record: name its read route in a short `shared` list at the top
 of the test, with the reason, as section 7 of `references/app.md` shows.
 Only `GET` routes belong there. Do not remove a route to make the loop
-pass.
+pass. And make record 1 of every kind exist, owned by someone else, before
+the loop runs: a route also answers "not found" when there is nothing to
+find, so the loop passes on an empty database without proving anything.
+Assert the records' numbers before, and that they are unchanged and the
+audit log has grown after.
 
 **Mistakes to avoid.** Checking the role and forgetting the ownership.
 Filtering in the page. A second route to the same data (an export, a search,

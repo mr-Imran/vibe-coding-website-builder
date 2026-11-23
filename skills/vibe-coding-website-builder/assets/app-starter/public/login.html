@@ -11,6 +11,11 @@
 <body class="centered">
   <main id="main" class="card">
     <h1 id="title">Sign in</h1>
+    <!-- Shown by js/login.js while the app has no accounts at all. -->
+    <p class="notice warn" id="first-account" hidden>There are no accounts yet, so nobody can sign in. The owner creates the first one in the app's folder: on Windows, double-click <strong>add-account.cmd</strong>; on any system, run <code>node tools/add-user.js</code>. Then reload this page.</p>
+    <!-- Text for people creating an account ("A member of staff has to approve it before you can book").
+         Write it here; it is shown only in "Create an account" mode, and stays hidden while it is empty. -->
+    <p class="hint" id="signup-note" hidden></p>
     <form id="auth-form" novalidate>
       <div class="field" id="name-field" hidden>
         <label for="name">Your name</label>

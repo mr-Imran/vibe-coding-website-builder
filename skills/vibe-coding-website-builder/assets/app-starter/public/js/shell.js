@@ -16,6 +16,7 @@ const MENU = [
   // { href: '/classes', label: 'Classes' },
   // { href: '/reports', label: 'Reports', roles: ['staff', 'manager'] },
   { href: '/people', label: 'People', roles: 'top' },
+  { href: '/activity', label: 'Activity', roles: 'top' },
   { href: '/account', label: 'Your account' },
 ];
 

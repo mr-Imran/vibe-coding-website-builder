@@ -6,6 +6,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
+import { registerActivity } from './core/activity.js';
 import { createAuth } from './core/auth.js';
 import { registerBackup } from './core/backup.js';
 import { migrate, openDb } from './core/db.js';
@@ -28,6 +29,7 @@ export async function buildApp(config = loadConfig(), { log = console } = {}) {
 
   auth.registerRoutes(app);
   registerBackup(app, { db, config, auth });
+  registerActivity(app, { db, config, auth });
   app.get('/api/events', hub.subscribe);
   app.get('/api/health', () => ({ ok: true }));           // hosts call this to see that the app is up
   registerModules(app, { db, config, auth, hub });
@@ -51,8 +53,25 @@ export async function buildApp(config = loadConfig(), { log = console } = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const config = loadConfig();
   const built = await buildApp(config);
-  const server = await built.app.listen();
+  let server;
+  try {
+    server = await built.app.listen();
+  } catch (err) {
+    built.db.close();
+    if (err.code === 'EADDRINUSE') {
+      // The likeliest cause by far: start-app was double-clicked twice.
+      console.error(`${config.appName} is probably running already, in another window: open http://localhost:${config.port} in your browser.\nIf it does not open, another program is using port ${config.port}. Close that program, or start this app on another port (see the README).`);
+    } else {
+      console.error(`${config.appName} could not start: ${err.message}`);
+    }
+    process.exit(1);
+  }
   console.log(`${config.appName} is running: http://localhost:${server.address().port}`);
+  if (built.db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0) {
+    console.log(config.production
+      ? 'There are no accounts yet, so nobody can sign in. Set ADMIN_EMAIL and ADMIN_PASSWORD in the settings of the host and restart: the first account is created from them.'
+      : 'There are no accounts yet, so nobody can sign in. Create the first one in another window:\n  Windows: double-click add-account.cmd      any system: node tools/add-user.js');
+  }
   if (config.production && !process.env.TIME_ZONE) {
     console.log(`TIME_ZONE is not set, so rules about times of day use this computer's zone (${config.timeZone}). Hosts usually run on UTC; set TIME_ZONE to where the business is, for example Europe/London.`);
   }

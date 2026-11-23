@@ -40,6 +40,14 @@ CREATE TABLE audit_log (
 );
 CREATE INDEX audit_log_at ON audit_log(at);
 
+-- The log as the Activity screen lists it: with the person's name, and a
+-- mark on the lines that are refusals.
+CREATE VIEW activity_list AS
+SELECT a.id, a.at, a.action, a.entity, a.entity_id, a.detail, a.user_id,
+       u.name AS user_name, u.email AS user_email,
+       CASE WHEN a.action IN ('auth.login_failed', 'auth.denied', 'access.denied', 'rule.refused') THEN 1 ELSE 0 END AS refused
+FROM audit_log a LEFT JOIN users u ON u.id = a.user_id;
+
 CREATE TABLE idempotency_keys (
   key        TEXT NOT NULL,
   scope      TEXT NOT NULL,

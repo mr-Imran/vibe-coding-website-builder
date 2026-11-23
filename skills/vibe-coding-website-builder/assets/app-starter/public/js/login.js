@@ -14,6 +14,13 @@ const target = next && next.startsWith('/') && !next.startsWith('//') ? next : '
 
 if (await loadSession()) location.href = target;
 
+// May people create their own account here, and is there any account yet?
+let state = { signup: true, firstAccountNeeded: false };
+try { state = await api('GET', '/api/auth/state'); } catch { /* the form still works without it */ }
+document.getElementById('first-account').hidden = !state.firstAccountNeeded;
+switcher.hidden = !state.signup || state.firstAccountNeeded;
+const signupNote = document.getElementById('signup-note');
+
 function setMode(value) {
   mode = value;
   const signup = mode === 'signup';
@@ -21,6 +28,7 @@ function setMode(value) {
   const heading = signup ? 'Create an account' : 'Sign in';
   document.title = appName ? `${heading} - ${appName}` : heading;
   document.getElementById('name-field').hidden = !signup;
+  signupNote.hidden = !signup || !signupNote.textContent.trim();
   document.getElementById('password-hint').hidden = !signup;
   document.getElementById('password').autocomplete = signup ? 'new-password' : 'current-password';
   submit.textContent = signup ? 'Create account' : 'Sign in';

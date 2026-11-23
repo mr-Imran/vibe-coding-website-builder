@@ -75,7 +75,8 @@ Hosts take an app from a GitHub repository. Two ways to put it there:
 2. Top right: **+**, **New repository**. Name it, choose **Private**,
    **Create repository**.
 3. Choose **uploading an existing file** and drag in what is *inside* the
-   project folder, without the `data` folder and without any `.env` file.
+   project folder, without the `data` folder, without any `.env` file, and
+   without a `look` folder if there is one (pictures of the screens).
    Tell them exactly which items to select, by name. At most 100 files at a
    time; a starter-based app is well under that. **Commit changes**.
 

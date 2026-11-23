@@ -53,7 +53,8 @@ One Node.js program, one database file, no packages to install.
 ├── tests/               the proof: one test file per module, plus the core's
 ├── tools/               rubric.js (the tests, counted against the requirements),
 │                        add-user.js (make an account), seed.js (example data),
-│                        look.js (every screen in a browser, as every role)
+│                        look.js (every screen in a browser, as every role),
+│                        journey.js (the main journey, clicked and typed in a browser)
 ├── start-app.cmd, add-account.cmd, load-example-data.cmd
 │                        the same three things by double-click, on Windows
 ├── data/                the database file (created when the app runs; never shared)
@@ -77,7 +78,9 @@ has not opened yet cannot be tested, only hoped about.
 ## 3. Before you write anything
 
 Work these out and tell the owner in plain words, as a short list. No approval
-is needed; it lets them stop you if you misunderstood.
+is needed; it lets them stop you if you misunderstood. If the owner cannot
+be reached while you work, the plan is not skipped: it becomes the first
+part of the hand-over, as "What it does" and "What I assumed" (section 10).
 
 - **The kinds of user** (roles) and what each may do. Two or three is normal:
   the people who run it, and the people who use it.
@@ -132,9 +135,10 @@ project folder, including the files whose names start with a dot. Then:
 
 The starter already has these screens, which every app needs: sign in and
 create an account (`login.html`), a home page, "Your account" with a password
-change, and "People" for the first role (add someone, change a role, switch
-an account off, set a new password for someone who is locked out, download a
-backup). The menu on every signed-in page comes from `MENU` in
+change, "People" for the first role (find someone, add someone, change a
+role, switch an account off, set a new password for someone who is locked
+out, download a backup), and "Activity" for the first role (sign-ins,
+changes to accounts, and what was refused and to whom). The menu on every signed-in page comes from `MENU` in
 `public/js/shell.js`; add the app's pages there, and start each page's script
 with `startPage()` from that file: `startPage()` for anyone signed in,
 `startPage(['staff', 'manager'])` for named roles, `startPage('top')` for the
@@ -148,6 +152,19 @@ plain in their names: rename the starter's menu entry and heading to
 "Accounts", call the app's own screen by the business's word ("Members"),
 and put a line on each that links to the other. Do not merge the app's
 fields into the starter's screen; it is covered by core tests as it is.
+The file stays `people.html` and the address stays `/people` (a core test
+looks for the menu entry by that address); only the words change.
+
+**Activity.** The Activity screen lists the audit log. The core writes to it
+by itself: sign-ins and failed sign-ins, changes to accounts, a route called
+by a role that may not use it, a record refused by `guardRecord()`, and
+every refusal that names its rule (`conflict('...', { rule: 'max_open' })`).
+A refusal that names no rule is not logged. So if the app or its hand-over
+says that staff can see every refused attempt, every refusal in the app's
+modules must name a rule; say "refused attempts" only for what is really
+there. A module adds its own lines with `audit()` (a member approved, a
+booking cancelled by staff) and gives them words in `WORDS` at the top of
+`public/js/activity.js`.
 
 What `core/` gives you, so that you do not write it again:
 
@@ -158,7 +175,8 @@ What `core/` gives you, so that you do not write it again:
 | `auth.js` | Sign-up, sign-in, sign-out, password change, managing people; the guards `auth.requireUser` and `auth.requireRole('admin')`; `auth.on('user.created' / 'user.changed', fn)` to react to accounts |
 | `validate.js` | `check(body, schema)` for everything a person sends, including lists (`type: 'list'`); `idParam()` |
 | `errors.js` | `notFound()`, `forbidden()`, `conflict()`, `invalid()`: answers a person can read. Each takes a last argument that names the rule: `conflict('...', { rule: 'max_open' })` |
-| `policy.js` | `guardRecord()` for "may this user touch this record"; `audit()` |
+| `policy.js` | `guardRecord()` for "may this user touch this record" (rules with `key: 'user_id'` for a record not keyed by `id`); `audit()` |
+| `activity.js` | `GET /api/activity`: the audit log as a list for the first role, with a count of refusals. Already registered, with its screen |
 | `records.js` | `listQuery()` for search, checked filters, sort (one column or a named order over several), pages, totals and counts; `updateVersioned()` for edits; `takeOne()` and its mirror image `giveBack()` for things that run out. The last three find a row by `id`, or by another column with `{ key: 'user_id' }` |
 | `backup.js` | `GET /api/backup`: the first role downloads a copy of the whole database. Already registered and on the People screen |
 | `idempotency.js` | `once(ctx, work)` so a double click or a resend happens once |
@@ -301,7 +319,17 @@ What that example does, and every route must do:
   shown or changed, and before the request body is read or checked. Guard
   first, then validate: the other way round, a malformed request aimed at
   someone else's record is answered "your input is wrong" (which tells them
-  the record exists) and never reaches the audit log.
+  the record exists) and never reaches the audit log. On a route that is
+  also wrapped in `once()` (cancel, approve: addressed by id, and harmless
+  when sent twice), the guard goes outside and `once()` around the rest, so
+  that every attempt by a stranger is refused and logged afresh:
+
+  ```js
+  app.post('/api/bookings/:id/cancel', auth.requireUser, (ctx) => {
+    const booking = guardRecord(ctx, load(idParam(ctx.params.id)), rules, 'write');
+    return once(ctx, async () => cancel(booking));
+  });
+  ```
 - **Something that belongs to every account** (an approval, a profile, a
   credit balance) gets its own table keyed by the user's id. Do not edit
   `core/auth.js` to add columns. Create the row when the account is created:
@@ -336,18 +364,27 @@ What that example does, and every route must do:
   a test sets the time: sessions, the sign-in limit, and the `at` column of
   `audit_log`. So a figure worked out from the audit log ("refusals in the
   last 7 days") compares against `now()`, not `config.now()`. Never call
-  `new Date()` for the current moment in a module.
+  `new Date()` for the current moment in a module. One more stamp is the
+  real clock's unless you say otherwise: `updateVersioned()` sets
+  `updated_at`. Pass `{ at }` as its last argument when a rule or a list
+  reads that column.
 - **A list that needs columns from two tables** (a booking with its class
   title) is a view: create it in a migration and give its name to
   `listQuery()`. Pass `sums: { total: 'price_cents' }` for a total over
   everything that matches the search and filters, not just the page shown;
   `sums: { open: { count: 'remaining > 0 AND active = 1' } }` counts the
   matching rows that meet a condition, with no extra column in the view.
+  A figure that depends on a value of yours (the clock, the person asking)
+  takes it in `params`, never pasted into the text:
+  `upcoming: { count: 'starts_at > ?', params: [at] }`.
   The view needs a column called `id` (rows that tie are ordered by it), or
   pass `tiebreak: 'some_unique_column'`. For an order over several columns
   ("by day, then start time, then room"), name it:
   `sorts: { timetable: ['day', 'starts_at', 'room'] }`, asked for with
-  `?sort=timetable`.
+  `?sort=timetable`. A column written with a minus runs against the others:
+  `waiting_first: ['approved', '-created_at']` is "not yet approved first,
+  and within each group the newest first". `?sort=-waiting_first` turns
+  every column round.
 - **A filter is checked like a form field.** In `listQuery()`'s `filters`,
   give each one the rule its value must meet:
   `status: { check: { type: 'enum', values: ['booked', 'cancelled'] } }`,
@@ -399,6 +436,16 @@ an app's screens are still web pages. What differs:
 - **Every form** shows the server's field messages next to the fields
   (`showFieldErrors`), keeps what the person typed, and cannot be sent twice
   (`withBusy`).
+- **Every field has a label**: a `<label for="the field's id">`, or the
+  field inside its `<label>`. A core test reads every page for it. A tick
+  box with words beside it is
+  `<label class="check" for="upcoming"><input id="upcoming" name="upcoming" type="checkbox" value="1"> Upcoming only</label>`;
+  the Activity screen has one among its filters. Tick boxes and radio
+  buttons are sized as themselves; do not style them as full-width fields.
+- **Text only for people creating an account** ("a member of staff has to
+  approve you before you can book") goes in the `signup-note` paragraph of
+  `login.html`. The sign-in page shows it in that mode only; no script
+  needs changing.
 - **Every action says what happened**, with `announce('Booked.')` or
   `announce('That slot has just been taken.', 'error')`. The message appears
   at the bottom of the window wherever the person has scrolled to, and is
@@ -419,7 +466,9 @@ an app's screens are still web pages. What differs:
   states, waits a moment while someone types, ignores an answer that a
   newer search has overtaken, and steps back when the last row of the last
   page is removed. The People screen (`people.html`, `js/people.js`) is the
-  example to copy, including the figure above the list.
+  example to copy, including the figure above the list. The names of the
+  form's fields also work in the page's address, so a figure on the home
+  page can link to the list already narrowed: `/members?approved=0`.
 - **Every table works on a phone.** Give it `class="stack"`, make the first
   cell of each row a `<th scope="row">`, and give every other cell
   `data-label="Column name"`: on a narrow screen each row becomes a card
@@ -477,7 +526,15 @@ test('M03 no route of the app answers without a session', async () => {
 ```
 
 The same list drives A03's loop: for every route whose `pattern` has `:id`
-in it, a signed-in user who does not own record 1 is refused. Some records
+in it, a signed-in user who does not own record 1 is refused. **Record 1
+must exist and belong to someone else, for every kind of record the routes
+address.** "Not found" is also what a route answers when there is no record
+1 at all, so on an empty database the loop is green and proves nothing.
+Before the loop, create the records as another user and assert that each
+has the number 1 (`assert.equal(made.body.id, 1)`); after it, assert that
+each is unchanged and that `audit_log` has gained `access.denied` lines.
+Where record 1 cannot be someone else's (user 1 is usually the first staff
+account), prove that route's ownership rule in a test of its own. Some records
 are meant to be seen by everyone who is signed in (a class, a machine), and
 their read route rightly answers 200. Name those in a list at the top of
 the test, the way `open` is above, each with its reason in a comment, and
@@ -502,8 +559,9 @@ The app's test checks what only the app knows: every page a menu entry or a
 link points to exists; every page loads its own script and that file exists;
 every table has a caption and either `class="stack"` or a reason not to;
 every button has a `type`; no fixed width in `app.css` is wider than a phone
-(320 pixels, the figure the page check uses too); and each form's fields are
-in the order a keyboard user would expect. These read files. They do not show that a page looks right, so say
+(320 pixels, the figure the page check uses too); and for the keyboard: no
+element has a `tabindex` above 0, and in each form the button that sends it
+comes after its last field. These read files. They do not show that a page looks right, so say
 in the report which screens you looked at, at which widths, and how.
 
 Tests that send many wrong passwords from one place run into the sign-in
@@ -549,7 +607,12 @@ check what that person and the database end up with.
   colleague), hand it over with no `data/` folder, and tell them the two
   steps: create an account (`add-account.cmd`, or the command), then start
   the app. An app that arrives with accounts already in it arrives with
-  passwords somebody else knows.
+  passwords somebody else knows. The app helps with the order: while it
+  has no accounts, the window it was started in says to create one, the
+  sign-in page says the same, and creating an account on that page is
+  refused (it would make an ordinary account with nobody to manage it).
+  Starting the app a second time prints "probably running already" and the
+  address, not an error.
 - **Example data.** `tools/seed.js` is already written except for the app's
   own records: fill in `addExampleData()`. The careful parts are done and
   tested: one account per role with passwords made up when it runs and shown
@@ -569,18 +632,42 @@ check what that person and the database end up with.
   `node tools/look.js`. It needs Chrome or Edge on the computer and nothing
   else. It loads the example data into a throw-away copy, starts the app on
   a spare port, signs in as each example account, opens every page in the
-  menu at 390 and 1280 pixels, and saves a picture of each in `look/`
-  (which is not committed). It reports script errors, anything the security
+  menu at 390 and 1280 pixels, and saves a picture of each in a folder
+  outside the project (it prints where; `--out` chooses another). It reports script errors, anything the security
   policy blocked, failed requests, pages that scroll sideways and the word
   "null" printed where a value was missing; then it signs out and presses
   Back, which must not show the last person's page again. Add
   `--page /classes/new` for a page no menu entry leads to. Then open the
   pictures and look: the tool cannot tell whether a screen looks right, and
-  it does not click through the journey. It exits with 2 when there is no
-  browser; say so in the report, and do not claim the screens were looked at.
-- Try the journey from section 3 by hand once (through the routes, as the
-  M01 test does, or in a browser tool if you have one). Then try to break
-  it: a second tab, a form sent empty, the address of someone else's record.
+  it presses nothing. It exits with 2 when there is no browser; say so in
+  the report, and do not claim the screens were looked at.
+- **Click through the journey**: `node tools/journey.js`. The tests prove
+  the routes; this proves the buttons are wired to them. It drives the same
+  browser, on the same kind of throw-away copy, but types into fields,
+  presses buttons and answers questions. Replace the starter's steps in
+  that file with the journey from section 3 for each kind of user, one
+  step per thing a person would notice, each ending with what they would
+  see:
+
+  ```js
+  await app.step('A member books a place and is told so', async () => {
+    await app.signIn('member');                        // member@example.com from the example data
+    await app.go('/classes');
+    await app.press('Book', { near: 'Beginners' });    // the button in the row or card that says "Beginners"
+    await app.see('Booked.');
+  });
+  ```
+
+  `fillIn('Label', value)` finds a field by its label, `press('Words')` a
+  button or link by its words, `answer('Words')` a button in an open
+  question, `see('text')` waits for text to appear; the rest is listed at
+  the top of `tools/browser.js`. Include at least one refusal the person
+  would meet (the third booking, the form sent empty) and the sign-out. A
+  failed step says why, shows what the page did say, and saves a picture.
+  Report it as it was: "tools/journey.js went through N steps in a
+  browser", or that there was no browser and the buttons were not pressed.
+- Then try to break it by hand: a second tab, the address of someone
+  else's record typed into the address bar.
 - **Signing out on a shared computer.** The starter already stops the Back
   button from showing the last person's page: pages are never kept by the
   browser, and a page for signed-in people that comes back from the
@@ -647,15 +734,19 @@ It is in this folder: [full path of the project folder]
 journey in one sentence.]
 
 **What was proven**
-[The table from tools/rubric.js: each requirement, met or not, and the
-number of tests. M08 in its own words: documented, not yet online.]
+[The requirements, from tools/rubric.js, rewritten for the person: one row
+for each requirement on their list, in their own wording, met or not, and
+the number of this app's tests for it. Leave out the "core tests" column
+and the rows for advanced requirements they did not ask for. M08 in its own
+words: documented, not yet online.]
 [N tests, all passing. They cover the cases listed in RUBRIC.md, not
 everything; nobody has tried to break in on purpose.]
 [Page check: N out of 100. A checklist of common faults, not a judgement of
 the design. Which screens you looked at yourself, at which widths, and how:
 "tools/look.js opened N screens as each role at 390 and 1280 pixels and
-found nothing; I looked at the pictures of ...", or that there was no
-browser and nobody has looked.]
+found nothing; I looked at the pictures of ...; tools/journey.js went
+through N steps by clicking and typing", or that there was no browser and
+nobody has looked or pressed anything.]
 
 **What I assumed**
 [Every rule or detail you were not given, one line each, for them to

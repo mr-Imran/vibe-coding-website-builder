@@ -21,7 +21,7 @@ compatibility: >-
   references/checklist.md lists the same checks to do by reading the files.
   Apps need Node.js 22.13 or newer on the person's computer and nothing else.
 metadata:
-  version: "0.2.2"
+  version: "0.2.3"
 ---
 
 # Vibe Coding Website Builder
@@ -249,7 +249,8 @@ Read `references/app.md` before anything else. In short:
 1. **Plan it in plain words first**: the kinds of user, three or more parts
    that depend on each other, one journey that crosses them, and the rules of
    the business as sentences. Rules you had to assume are written down as
-   assumed and confirmed with the owner.
+   assumed and confirmed with the owner. If the owner cannot be reached
+   while you work, the plan becomes the first part of the hand-over.
 2. **Copy the starter** from `assets/app-starter/` into the project folder.
    It is one Node program with sign-in, roles, sessions, the database and the
    safety helpers already written and tested. Run its tests before adding
@@ -265,7 +266,9 @@ Read `references/app.md` before anything else. In short:
    app's `public/` folder. Then look at the screens: `node tools/look.js`
    opens every page as every role in a browser without a window, at phone
    and desktop width, saves a picture of each and reports what only a
-   browser shows (section 8 of `references/app.md`).
+   browser shows. And press the buttons: write the app's main journey into
+   `tools/journey.js` and run it; it types, clicks and reads the answers in
+   the same browser (section 8 of `references/app.md`).
 6. **Hand over** with the report template in section 10 of
    `references/app.md`, not the site's template above: how to create an
    account, start the app and sign in (on Windows, three files to
@@ -385,8 +388,9 @@ site has to be published again for visitors to see it if it is already online.
 
 The app starter has its own tools, run with Node from the project folder:
 `node --test` runs every test, `node tools/rubric.js --write` reports them
-against M01 to A08, and `node tools/look.js` looks at every screen in a
-browser as each role (it needs Chrome or Edge on the computer).
+against M01 to A08, `node tools/look.js` looks at every screen in a browser
+as each role, and `node tools/journey.js` clicks through the main journey
+(both need Chrome or Edge on the computer).
 
 ## References
 

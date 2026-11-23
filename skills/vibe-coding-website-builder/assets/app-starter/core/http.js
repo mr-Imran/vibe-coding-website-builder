@@ -6,6 +6,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { HttpError, badRequest, forbidden, notFound, unauthorized } from './errors.js';
+import { audit } from './policy.js';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -43,7 +44,12 @@ export function createApp({ db, config, publicDir, auth = null, log = console })
       const server = http.createServer(handle);
       server.requestTimeout = 30_000;
       server.headersTimeout = 15_000;
-      return new Promise((resolve) => server.listen(port, host, () => resolve(server)));
+      // A port that is already taken is reported to the caller (server.js
+      // turns it into a sentence) and not thrown as a raw crash.
+      return new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(port, host, () => { server.off('error', reject); resolve(server); });
+      });
     },
   };
 
@@ -81,6 +87,15 @@ export function createApp({ db, config, publicDir, auth = null, log = console })
     } catch (err) {
       if (res.headersSent) { res.end(); return; }
       if (err instanceof HttpError) {
+        // A refusal that names its rule (conflict('...', { rule: 'max_open' }))
+        // is written to the audit log, so "what was refused, and to whom" can
+        // be answered later. It is written here, after any transaction the
+        // refusal came out of has been rolled back.
+        if (ctx && err.extra && err.extra.rule && (err.status === 403 || err.status === 409)) {
+          try {
+            audit(db, { userId: ctx.user ? ctx.user.id : null, action: 'rule.refused', detail: `${err.extra.rule}: ${req.method} ${req.url.split('?')[0]}`, ip: ctx.ip });
+          } catch (failed) { log.error(`[${requestId}] could not log a refusal`, failed); }
+        }
         return sendJson(res, err.status, { error: { code: err.code, message: err.message, ...err.extra } });
       }
       log.error(`[${requestId}] ${req.method} ${req.url}`, err);
