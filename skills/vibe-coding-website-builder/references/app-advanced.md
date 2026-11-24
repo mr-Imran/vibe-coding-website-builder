@@ -307,8 +307,15 @@ code outside `tx()`, or with an `await` between the read and the write, is
 the classic double booking.
 
 The starter's "four separate programs" test shows the stronger form, where
-the requests really do run at the same moment; copy it when the result
-matters. Copy its `runAll()` (from `tests/helpers.js`) with it, not a bare
+the requests really do run at the same moment. For A05 it is the proof, so
+always have one: the twenty requests in one program are answered one at a
+time by one Node program, and pass even when the transaction is missing or
+reads before it writes. Do not copy `tests/race-worker.js` as it is: it
+works on the core's own test tables. Write a worker of your own
+(`tests/booking-worker.js`) that opens the app's database, calls the app's
+own function (`book()`) with a fixed `config.now`, and prints what it got;
+the test starts four of them on accounts already approved and counts the
+bookings. Copy the rest of the pattern from the starter's test. Copy its `runAll()` (from `tests/helpers.js`) with it, not a bare
 `Promise.all`: `Promise.all` gives up when the first program fails while
 the others still have the database open, the clean-up then fails too
 (Windows will not delete a file that is in use), and the report shows the

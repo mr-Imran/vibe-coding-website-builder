@@ -48,12 +48,22 @@ export const REQUIREMENTS = [
 
 export function parseTap(output) {
   const results = [];
+  let last = null;
   for (const line of output.split(/\r?\n/)) {
+    // A group of tests (describe('M03 ...')) has a line of its own, marked
+    // type: 'suite' below it. It is not a test: the tests inside it count.
+    if (/^\s*type: 'suite'\s*$/.test(line)) {
+      if (last) results.splice(results.indexOf(last), 1);
+      last = null;
+      continue;
+    }
     const m = /^\s*(not ok|ok) \d+ - (.*?)(?:\s+# (SKIP|TODO)\b.*)?$/.exec(line);
     if (!m) continue;
+    last = null;
     const id = /^(core )?([MA]\d\d)\b/.exec(m[2]);
     if (!id) continue;
-    results.push({ id: id[2], core: Boolean(id[1]), name: m[2], status: m[3] ? 'skipped' : (m[1] === 'ok' ? 'passed' : 'failed') });
+    last = { id: id[2], core: Boolean(id[1]), name: m[2], status: m[3] ? 'skipped' : (m[1] === 'ok' ? 'passed' : 'failed') };
+    results.push(last);
   }
   return results;
 }

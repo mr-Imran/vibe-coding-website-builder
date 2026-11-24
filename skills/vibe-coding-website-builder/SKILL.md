@@ -21,7 +21,7 @@ compatibility: >-
   references/checklist.md lists the same checks to do by reading the files.
   Apps need Node.js 22.13 or newer on the person's computer and nothing else.
 metadata:
-  version: "0.2.5"
+  version: "0.2.6"
 ---
 
 # Vibe Coding Website Builder

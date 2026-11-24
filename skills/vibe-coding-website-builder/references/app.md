@@ -129,8 +129,9 @@ project folder, including the files whose names start with a dot. Then:
    the sign-in form), and the title of `README.md` (a `[[FILL IN]]` mark
    until then). No script holds the name. A core test ("core M08
    every page carries the app's name") fails while a page's title lacks the
-   name or "My app" is left anywhere in `public/`, so run the tests after
-   renaming and it tells you what you missed. No test sees the look: give
+   name or "My app" is left anywhere in `public/`, and while `appName` is
+   still "My app" once `modules/index.js` lists a module of the app's own,
+   so run the tests after renaming and it tells you what you missed. No test sees the look: give
    `public/favicon.svg` the app's first letter and its colour (the starter's
    is an "A" on blue), and set `--accent` at the top of `app.css` to the
    same colour.
@@ -390,7 +391,11 @@ What that example does, and every route must do:
   `app.everyNewDay((day) => keepSlotsAhead(db, day))` in the module's
   `register` (it follows `config.now()`, so `t.setClock()` moves it too),
   and when a machine is added, insert the slots for today and the next N
-  days with
+  days. `tools/seed.js` runs that work before the example data, so the
+  example can book the slots. In a test, set the clock before the first
+  request (`t.user()` signs in, which is one): the work runs for the day the
+  clock shows then, and again at the first request after the clock moves
+  to another day, or at once with `await t.app.startDay()`. Insert them with
   `INSERT OR IGNORE` against `UNIQUE (machine_id, starts_at)`, so running it
   twice adds nothing. Store each slot's local day and wall-clock times
   (`day`, `starts`, `ends` as the owner says them) beside the UTC moment,
@@ -400,6 +405,12 @@ What that example does, and every route must do:
   `TIME_ZONE` before the first start on a host (`app-publish.md`). The slot
   times themselves are the owner's to give: until they do, they are an
   assumption in `RULES.md` and a yellow note on the screen that shows them.
+- **Records the owner has already given you** (the four machines they
+  named, their rooms, their price list) are real data, not example data:
+  put them in a migration (`migrations/002_machines.sql`), so a fresh
+  database has them and the owner does not type them in again. Example
+  data (`tools/seed.js`) is only what is made up for trying the app. Say
+  in the hand-over which is which.
 - **There are two clocks, on purpose.** `config.now()` is the business's
   clock. Use it for every rule ("has it started?", "is the deadline past?")
   and for every time the app's own tables store (`created_at`, `booked_at`,
@@ -430,6 +441,11 @@ What that example does, and every route must do:
   A figure that must not change when the person narrows the list (how many
   of their 2 bookings they have used) comes from a route or a query of its
   own, not from `sums`.
+  A fact on each row that depends on who is asking ("this slot is yours",
+  and for staff only, who holds it) cannot be in the view, which knows
+  nobody. Add it after `listQuery()`, for the rows of this page only: one
+  query with `id IN (?, ?, ...)` over the page's ids, then a field on each
+  row. Leave out what this person may not see, as the route would.
   The view needs a column called `id` (rows that tie are ordered by it), or
   pass `tiebreak: 'some_unique_column'`. For an order over several columns
   ("by day, then start time, then room"), name it:
@@ -545,13 +561,23 @@ an app's screens are still web pages. What differs:
   class times, their prices). The style is already in `app.css`:
   `<mark class="needs-you">your slot times</mark>`. The page check counts
   them and says "not yet" while one is left (section 10 says how to report
-  that).
+  that). A yellow note talks to the owner, so put it on the screens only
+  the owner's role sees (the Machines page for staff). On a member's screen
+  show the assumed value plainly ("09:00 to 12:00"), with no words meant
+  for the owner.
+- **Show a rule before the click when the page can know it.** A member who
+  already holds the most bookings allowed sees the Book buttons switched
+  off, with the reason beside them ("You have 2 upcoming bookings, the
+  most allowed"); someone not yet approved sees why they cannot book. The
+  server still refuses, and its answer still says why: the page may be out
+  of date.
 
 ## 7. The eight requirements and their tests
 
 A requirement is met when the app does it and one of the app's own tests
 proves it. Name each test with the requirement's id at the start; the report
-tool counts them. Put them in `tests/<module>.test.js`, and the ones that
+tool counts them. A group (`describe('M03 sign-in', ...)`) is not counted:
+only the tests inside it are, so their own names need the id too. Put them in `tests/<module>.test.js`, and the ones that
 are about the whole app (M01's journey, M03's and A03's loops, A05's race)
 in files of their own such as `tests/system.test.js`, `tests/access.test.js`
 and `tests/concurrency.test.js`. A file whose name does not end in
@@ -559,7 +585,10 @@ and `tests/concurrency.test.js`. A file whose name does not end in
 Use `tests/helpers.js`: `startApp()` runs the real app with a throw-away
 database, `t.user(email, role)` gives each pretend user their own cookies,
 `t.setClock()` moves the business clock, `tooWideForAPhone()` and
-`STAND_IN` are the checks for M07 and M08 below.
+`STAND_IN` are the checks for M07 and M08 below. A row read straight from
+the database (`t.db.prepare(...).get()`) has no ordinary prototype, so
+`assert.deepEqual(row, { ... })` fails while both sides print the same:
+compare `{ ...row }`.
 
 ```js
 test('M04 a member with three open bookings cannot book a fourth', async () => { ... });
@@ -853,7 +882,12 @@ RUBRIC.md, not everything; nobody has tried to break in on purpose.]
 faults, not a judgement of the design. When the only thing between it and
 "ready" is a yellow note waiting for the owner, say so in those words: "97,
 'not yet', for one yellow note on the Machines page that waits for your slot
-times". Which screens you looked at yourself, at which widths, and how:
+times". The check counts each note, so one answer shown on two screens is
+"two yellow notes, both for your slot times". For a project that will be
+marked, the notes are still right: say that the score is held back by
+them, and that it goes up when the owner's real details replace them.
+Leaving a guess unmarked to raise the score is the invented-review
+mistake again. Which screens you looked at yourself, at which widths, and how:
 "tools/look.js opened N screens as each role at 390 and 1280 pixels and
 found nothing; I looked at the pictures of ...; tools/journey.js went
 through N steps by clicking and typing", or that there was no browser and
@@ -878,9 +912,10 @@ its catch. One or two sentences, before they ask.]
 steps. What they will need: the accounts named in app-publish.md.]
 ```
 
-Check every sentence of the report against what is in the folder before
-sending it: the number of tests, the number of days of example data, the
-names of the files to double-click, and what each screen shows (the
+Check every sentence of the report, and of `README.md`, against what is in
+the folder before sending it: the number of tests, the number of days of
+example data, the number of example accounts, the names of the files to
+double-click, and what each screen shows (the
 Activity screen lists what section 4 says, not "everything refused"). A report that promises fourteen days
 where thirteen were made is the app-sized version of a wrong phone number.
 

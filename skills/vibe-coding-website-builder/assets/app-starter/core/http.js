@@ -50,6 +50,11 @@ export function createApp({ db, config, publicDir, auth = null, log = console })
     // so a test that moves the clock with t.setClock() sees it too. Write it
     // so that running it twice does no harm (INSERT OR IGNORE).
     everyNewDay: (fn) => { daily.push(fn); },
+    // Run that work now if it has not run yet for today's local day. The
+    // first request does it by itself; tools/seed.js calls it before the
+    // example data, which answers no request, and a test can call it after
+    // t.setClock() moves to another day: await t.app.startDay().
+    startDay,
     listen(port = config.port, host = config.host) {
       const server = http.createServer(handle);
       server.requestTimeout = 30_000;
@@ -63,6 +68,14 @@ export function createApp({ db, config, publicDir, auth = null, log = console })
     },
   };
 
+  async function startDay() {
+    if (!daily.length) return;
+    const day = localParts(config.now ? config.now() : new Date(), config.timeZone || 'UTC').day;
+    if (day === lastDay) return;
+    for (const fn of daily) await fn(day);
+    lastDay = day;
+  }
+
   async function handle(req, res) {
     const requestId = randomUUID().slice(0, 8);
     setSecurityHeaders(res, config);
@@ -75,13 +88,7 @@ export function createApp({ db, config, publicDir, auth = null, log = console })
       if (!pathname.startsWith('/api/')) return await serveStatic(req, res, pathname);
 
       res.setHeader('Cache-Control', 'no-store');
-      if (daily.length) {
-        const day = localParts(config.now ? config.now() : new Date(), config.timeZone || 'UTC').day;
-        if (day !== lastDay) {
-          for (const fn of daily) await fn(day);
-          lastDay = day;
-        }
-      }
+      await startDay();
       const match = findRoute(req.method, pathname);
       if (!match) throw notFound();
       ctx = makeContext(req, res, url, match.params, requestId);

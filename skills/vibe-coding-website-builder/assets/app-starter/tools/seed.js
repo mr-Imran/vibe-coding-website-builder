@@ -76,6 +76,10 @@ try {
     if (!config.roles.includes(extra.role)) throw new Error(`EXTRA_ACCOUNTS: "${extra.role}" is not one of the roles in config.js.`);
     wanted.push({ key: extra.key, role: extra.role, name: extra.name || `Example ${extra.key}` });
   }
+  // Work the app does once a day (making the coming days' slots with
+  // app.everyNewDay()) normally runs at the first request. Loading example
+  // data answers none, so it runs here first: the example can book them.
+  await built.app.startDay();
   const users = {};
   for (const { key, role, name } of wanted) {
     const email = `${key}@example.com`;

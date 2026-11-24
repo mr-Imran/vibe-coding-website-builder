@@ -25,7 +25,8 @@
 //   asOther('member')                          a second person at the same time, in another "browser" without a
 //                                              screen: const other = await app.asOther('member2');
 //                                              await other.post('/api/bookings', { slot_id: 7 }); then reload and see
-//   see('text'), notSee('text')                waits up to five seconds; fails with what the page does show
+//   see('text'), notSee('text')                waits up to five seconds; fails with what the page does show;
+//                                              both take { near, nth } too: see('Taken', { near: '3D printer 1' })
 //   status()                                   what announce() last said
 //   count('css selector'), text('css selector'), js('expression'), width(390), shot('name')
 //
@@ -346,18 +347,24 @@ export async function openApp() {
     },
     // The words a person can read: the choices hidden in a closed drop-down
     // list do not count, so see('CNC router') waits for the list, not the filter.
-    async see(text, { timeout = 5000 } = {}) {
+    // With { near } (and { nth }), only in the row, card or list item that
+    // says it: see('Taken', { near: '3D printer 1 09:00' }).
+    async see(text, { timeout = 5000, near = null, nth = null } = {}) {
+      const words = `(() => { const found = ${near ? `scopeFor(${JSON.stringify(near)}, ${JSON.stringify(countFrom1(nth))})` : '{ scope: document.body }'}; return found.problem ? { problem: found.problem } : { words: said(found.scope) }; })()`;
       let last = '';
       for (let waited = 0; waited <= timeout; waited += 150) {
-        last = await inPage('said(document.body)');
-        if (last.includes(text)) return;
+        const got = await inPage(words);
+        last = got.problem || got.words;
+        if (!got.problem && got.words.includes(text)) return;
         await sleep(150);
       }
-      throw new Error(`expected to see "${text}" on ${await where()}. The page shows: ${last.slice(0, 400)}`);
+      throw new Error(`expected to see "${text}"${near ? ` near "${near}"` : ''} on ${await where()}. ${near ? 'That part' : 'The page'} shows: ${last.slice(0, 400)}`);
     },
-    async notSee(text) {
+    async notSee(text, { near = null, nth = null } = {}) {
       await settle();
-      if ((await inPage('said(document.body)')).includes(text)) throw new Error(`"${text}" is on ${await where()} and should not be`);
+      const got = await inPage(`(() => { const found = ${near ? `scopeFor(${JSON.stringify(near)}, ${JSON.stringify(countFrom1(nth))})` : '{ scope: document.body }'}; return found.problem ? { problem: found.problem } : { words: said(found.scope) }; })()`);
+      if (got.problem) throw new Error(got.problem);
+      if (got.words.includes(text)) throw new Error(`"${text}" is on ${await where()}${near ? ` near "${near}"` : ''} and should not be`);
     },
     status: () => js("(document.getElementById('status') || {}).textContent || ''"),
     count: (selector) => js(`document.querySelectorAll(${JSON.stringify(selector)}).length`),

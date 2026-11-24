@@ -689,6 +689,10 @@ describe('core', () => {
 
   test('core M08 every page carries the app\'s name from config.js, and the starter\'s stand-in name is gone from pages and scripts', () => {
     const { appName } = loadConfig({});
+    // The starter itself is "My app". An app with modules of its own is not.
+    const modulesFile = fs.readFileSync(path.join(starter, 'modules', 'index.js'), 'utf8');
+    const hasModules = !/^const modules = \[\s*\];/m.test(modulesFile);
+    if (hasModules) assert.notEqual(appName, 'My app', 'appName in config.js is still "My app": give the app its name there, then in the pages');
     const dir = path.resolve(import.meta.dirname, '../public');
     for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.html'))) {
       const title = /<title>([^<]*)<\/title>/.exec(fs.readFileSync(path.join(dir, name), 'utf8'))[1];
@@ -1015,6 +1019,31 @@ describe('core', () => {
         assert.equal((await failing.client().get('/api/health')).status, 500, 'work that failed is tried again on the next request');
       } finally { await failing.stop(); }
     } finally { await s.stop(); }
+  });
+
+  test('core M04 the work for a new day can be run before any request, as the example data needs', async () => {
+    const days = [];
+    const s = await startApp({ setup: (built) => built.app.everyNewDay((day) => { days.push(day); }) });
+    try {
+      s.setClock('2030-06-01T10:00:00Z');
+      await s.app.startDay();
+      await s.app.startDay();
+      assert.deepEqual(days, ['2030-06-01'], 'once for the day, with no request');
+      s.setClock('2030-06-02T10:00:00Z');
+      await s.app.startDay();
+      await s.client().get('/api/health');
+      assert.deepEqual(days, ['2030-06-01', '2030-06-02'], 'and the first request of that day does not run it again');
+    } finally { await s.stop(); }
+    const seed = fs.readFileSync(path.join(starter, 'tools', 'seed.js'), 'utf8');
+    assert.ok(seed.indexOf('await built.app.startDay();') > 0 && seed.indexOf('await built.app.startDay();') < seed.indexOf('addExampleData({ db, config, users });'),
+      'tools/seed.js runs the day\'s work before the example data, so there are slots to book');
+  });
+
+  test('core M08 the report by requirement counts tests, not the groups they are in', async () => {
+    const { parseTap } = await import('../tools/rubric.js');
+    const tap = ['# Subtest: M03 sign-in', '    # Subtest: M03 inner', '    ok 1 - M03 inner', '      ---', "      type: 'test'", '      ...', '    1..1',
+      'ok 1 - M03 sign-in', '  ---', "  type: 'suite'", '  ...', 'ok 2 - M04 top', '  ---', "  type: 'test'", '  ...', 'ok 3 - not a requirement', '  ---', "  type: 'suite'", '  ...'].join('\n');
+    assert.deepEqual(parseTap(tap).map((r) => r.name), ['M03 inner', 'M04 top']);
   });
 
   test('core M04 a page learns the business\'s own day and time when it signs in', async () => {
