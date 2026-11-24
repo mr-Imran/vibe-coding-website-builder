@@ -254,9 +254,18 @@ Both helpers find the row by `id`. For a table keyed by something else (a
 credit balance keyed by `user_id`), pass `{ key: 'user_id' }` as the last
 argument: `takeOne(db, 'balances', user.id, 'credits', 1, { key: 'user_id' })`.
 
+**The same person, twice.** When `takeOne()` finds nothing left, look
+before answering: if the slot is already held by the person asking (a second
+click, a resend without its key), answer that they already have it, not
+"someone else has just taken it". Check it first, inside the same
+transaction:
+`if (db.prepare("SELECT 1 FROM bookings WHERE slot_id = ? AND member_id = ? AND status = 'booked'").get(slot_id, ctx.user.id)) throw conflict('You have already booked this slot.', { rule: 'already_yours' });`
+
 **The screen.** The loser sees a clear sentence and the list refreshes to
 show nothing left. With A01 in place, everyone watching sees the count drop
-live.
+live. `tools/journey.js` can show it: a second person takes the last one
+with `await (await app.asOther('member2')).post(...)`, then the page's own
+attempt is answered with the sentence.
 
 **The app's test.** Twenty signed-in clients request the last one in the same
 instant (`Promise.all`): one 201, nineteen 409, `remaining` is 0, exactly one

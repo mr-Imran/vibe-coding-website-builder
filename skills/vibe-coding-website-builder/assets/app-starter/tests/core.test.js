@@ -534,6 +534,10 @@ describe('core', () => {
       assert.ok(text.includes('\r\n') && !/[^\r]\n/.test(text), `${name} has Windows line endings (batch files misbehave without them)`);
       assert.ok(!/localhost:\d+/.test(text), `${name} does not promise an address; the app prints the real one`);
     }
+    // Git keeps them exactly as they are; every other text file has Unix line endings everywhere.
+    const attributes = fs.readFileSync(path.join(starter, '.gitattributes'), 'utf8');
+    assert.match(attributes, /^\*\.cmd -text$/m);
+    assert.match(attributes, /^\* text=auto eol=lf$/m);
   });
 
   test('core M03 after signing out, the Back button does not bring the last person\'s page back', async () => {
@@ -910,6 +914,184 @@ describe('core', () => {
       assert.match(fs.readFileSync(path.join(starter, 'public', 'js', 'shell.js'), 'utf8'), /href: '\/activity'[^\n]*roles: 'top'/);
       assert.match(fs.readFileSync(path.join(starter, 'public', 'js', 'activity.js'), 'utf8'), /startPage\('top'\)/);
     } finally { await s.stop(); }
+  });
+
+  // ---------------------------------------------------------------- v0.2.4
+
+  test('core M05 a list tells the page what came back before it builds the rows, hands every row the whole answer, and takes a plain array for a short list', async () => {
+    const { createList } = await import('../public/js/ui.js');
+    const real = { fetch: globalThis.fetch, document: globalThis.document, location: globalThis.location, Node: globalThis.Node };
+    class Box {
+      constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.attributes = {}; }
+      setAttribute(name, value) { this.attributes[name] = value; }
+      removeAttribute(name) { delete this.attributes[name]; }
+      append(...kids) { this.children.push(...kids); }
+      replaceChildren(...kids) { this.children = kids; }
+      addEventListener() {}
+      closest() { return null; }
+    }
+    let answer = null;
+    globalThis.Node = Box;
+    globalThis.document = { createElement: (tag) => new Box(tag), createTextNode: (text) => ({ text }) };
+    globalThis.location = { search: '', pathname: '/things' };
+    globalThis.fetch = async () => new Response(JSON.stringify(answer), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    try {
+      const said = [];
+      let today = null;
+      const body = new Box('ul');
+      const list = createList({
+        url: '/api/things', body, empty: () => 'Nothing yet.',
+        loaded: (data) => { today = data.today; said.push('loaded'); },
+        row: (thing, data) => { said.push(`${thing.name}: today is ${today}, the answer says ${data.today}`); return new Box('li'); },
+      });
+      answer = { rows: [{ name: 'Kettle' }, { name: 'Lamp' }], total: 2, page: 1, pages: 1, today: '2026-11-24' };
+      await list.load();
+      assert.deepEqual(said, ['loaded', 'Kettle: today is 2026-11-24, the answer says 2026-11-24', 'Lamp: today is 2026-11-24, the answer says 2026-11-24']);
+      assert.equal(body.children.length, 2);
+
+      // Four machines from a route that answers with an array: rows, and the empty state.
+      said.length = 0;
+      answer = [{ name: 'Laser cutter' }];
+      await list.load();
+      assert.equal(said[0], 'loaded');
+      assert.match(said[1], /^Laser cutter/);
+      answer = [];
+      await list.load();
+      assert.equal(body.children.length, 1);
+      assert.deepEqual(body.children[0].children, [{ text: 'Nothing yet.' }], 'the empty list says so');
+    } finally {
+      for (const [name, value] of Object.entries(real)) { if (value === undefined) delete globalThis[name]; else globalThis[name] = value; }
+    }
+  });
+
+  test('core M07 no width in app.css is wider than a phone, and the check knows a width that only applies on wide screens', async () => {
+    const { tooWideForAPhone } = await import('./helpers.js');
+    const css = [
+      '.a { width: 30rem; }', '.b { max-width: 60rem; }', '.d { width: min(26rem, calc(100% - 2rem)); }', '.e { border-width: 400px; }',
+      '.f { flex-basis: 400px }', '.g { width: 100%; }', '.h { width: clamp(10rem, 50%, 40rem); }', '.i { width: clamp(21rem, 50%, 40rem); }',
+      '/* .j { width: 50rem; } */', '@media (min-width: 48rem) { .wide { min-width: 25rem; } .wide2 { width: 40rem } }',
+      '@media (max-width: 40rem) { .narrow { width: 25rem; } }', '.k { width: 20rem; }',
+    ].join('\n');
+    assert.deepEqual(tooWideForAPhone(css).map((line) => line.split(' {')[0]), ['.a', '.f', '.i', '.narrow']);
+    assert.match(tooWideForAPhone('.a { width: 30rem; }')[0], /480 pixels, wider than a 320-pixel phone/);
+    const sheet = fs.readFileSync(path.join(starter, 'public', 'app.css'), 'utf8');
+    assert.deepEqual(tooWideForAPhone(sheet), [], 'app.css, with the app\'s own additions');
+    // The yellow notes of section 3 work in an app too.
+    assert.match(sheet, /\.needs-you\s*\{[^}]*background/);
+    assert.match(sheet, /\.needs-you-photo\s*\{/);
+  });
+
+  test('core M04 a test can move the app\'s clock while the app runs', async () => {
+    const s = await startApp();
+    try {
+      s.setClock('2030-01-02T09:59:59Z');
+      assert.equal(s.config.now().toISOString(), '2030-01-02T09:59:59.000Z');
+      s.setClock('2030-01-02T10:00:00Z');
+      assert.equal(s.config.now().toISOString(), '2030-01-02T10:00:00.000Z', 'one second later, in the same app');
+      s.setClock(null);
+      assert.ok(Math.abs(s.config.now().getTime() - Date.now()) < 5000, 'and back to the real time');
+      assert.throws(() => s.setClock('next Tuesday'), /not a moment/);
+    } finally { await s.stop(); }
+    const fixed = await startApp({ config: { now: () => new Date('2031-05-05T05:05:05Z') } });
+    try { assert.equal(fixed.config.now().toISOString(), '2031-05-05T05:05:05.000Z', 'config: { now } still fixes it for the whole run'); } finally { await fixed.stop(); }
+  });
+
+  test('core M06 the tests and the browser tools can be kept within a range of ports', async () => {
+    const { freePort, onSparePort, portRange } = await import('../tools/ports.js');
+    assert.equal(portRange({}), null);
+    assert.deepEqual(portRange({ PORTS: ' 3800 - 3899 ' }), [3800, 3899]);
+    for (const wrong of ['3800', '3899-3800', 'a-b', '0-10', '65000-70000']) assert.throws(() => portRange({ PORTS: wrong }), /a range of ports such as 3800-3899/, wrong);
+    assert.equal(await onSparePort(async (port) => port, {}), 0, 'without PORTS the system picks');
+    const tried = [];
+    const got = await onSparePort(async (port) => {
+      tried.push(port);
+      if (port !== 3805) throw Object.assign(new Error('taken'), { code: 'EADDRINUSE' });
+      return `listening on ${port}`;
+    }, { PORTS: '3800-3809' });
+    assert.equal(got, 'listening on 3805');
+    assert.ok(tried.every((p) => p >= 3800 && p <= 3809) && new Set(tried).size === tried.length, 'within the range, each port once');
+    await assert.rejects(onSparePort(async () => { throw Object.assign(new Error('taken'), { code: 'EADDRINUSE' }); }, { PORTS: '3800-3801' }), /from 3800 to 3801/);
+    await assert.rejects(onSparePort(async () => { throw new Error('something else'); }, { PORTS: '3800-3801' }), /something else/, 'other failures are not hidden');
+    // For real: a port that is free now, then the test helper made to use only that one.
+    const port = await freePort({});
+    assert.equal(await freePort({ PORTS: `${port}-${port}` }), port);
+    const saved = process.env.PORTS;
+    process.env.PORTS = `${port}-${port}`;
+    try {
+      const s = await startApp();
+      try { assert.equal(s.base, `http://127.0.0.1:${port}`); } finally { await s.stop(); }
+    } finally { if (saved === undefined) delete process.env.PORTS; else process.env.PORTS = saved; }
+    // The browser tools take theirs from the same place.
+    const browser = fs.readFileSync(path.join(starter, 'tools', 'browser.js'), 'utf8');
+    assert.match(browser, /PORT: String\(await freePort\(\)\)/);
+    assert.match(browser, /const port = await freePort\(\);/);
+    assert.ok(!/PORT: '0'/.test(browser));
+  });
+
+  test('core M08 the results file is dated by this computer\'s calendar, not London\'s', async () => {
+    const { localDate } = await import('../tools/rubric.js');
+    assert.equal(localDate(new Date(2026, 10, 24, 0, 30)), '2026-11-24', 'just after midnight');
+    assert.equal(localDate(new Date(2026, 10, 23, 23, 59)), '2026-11-23', 'just before');
+    assert.match(fs.readFileSync(path.join(starter, 'tools', 'rubric.js'), 'utf8'), /const stamp = localDate\(\);/);
+  });
+
+  test('core M08 the words still to fill in are marked so a test finds them, and ordinary writing is not mistaken for them', async () => {
+    const { STAND_IN } = await import('./helpers.js');
+    assert.match('Live address: [[FILL IN: the https:// address once it is online]]', STAND_IN);
+    assert.match('| M01 | [[FILL IN]] |', STAND_IN);
+    for (const prose of ['Passwords cannot be recovered, only replaced.', 'REPLACE the battery', 'Fill in the form [[note]]']) assert.doesNotMatch(prose, STAND_IN, prose);
+    // The starter's own documents use only that mark, so the app's M08 test can rely on it.
+    for (const name of ['README.md', 'RUBRIC.md', 'RULES.md']) {
+      const text = fs.readFileSync(path.join(starter, name), 'utf8');
+      assert.ok(!/\bREPLACE\b/.test(text), `${name} has no old REPLACE marks`);
+    }
+  });
+
+  test('core M07 the picture tools never empty a folder of someone else\'s files', async () => {
+    const { picturesReady } = await import('../tools/browser.js');
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'pictures-'));
+    try {
+      const fresh = path.join(base, 'new');
+      picturesReady(fresh);
+      assert.ok(fs.existsSync(fresh), 'a new folder is made');
+      fs.writeFileSync(path.join(fresh, 'old-picture.png'), 'png');
+      picturesReady(fresh);
+      assert.deepEqual(fs.readdirSync(fresh).filter((f) => !f.startsWith('.')), [], 'its own old pictures are removed');
+
+      const theirs = path.join(base, 'theirs');
+      fs.mkdirSync(theirs);
+      fs.writeFileSync(path.join(theirs, 'notes.txt'), 'keep me');
+      fs.writeFileSync(path.join(theirs, 'photo.png'), 'keep me too');
+      assert.throws(() => picturesReady(theirs), /did not make, so it was left as it is/);
+      assert.deepEqual(fs.readdirSync(theirs).sort(), ['notes.txt', 'photo.png'], 'nothing was deleted');
+    } finally { removeFolder(base); }
+    const look = fs.readFileSync(path.join(starter, 'tools', 'look.js'), 'utf8');
+    assert.ok(!/rmSync/.test(look), 'look.js deletes nothing itself');
+    assert.match(look, /picturesReady\(opts\.dir\)/);
+    // And the browser is told not to fetch updates, which leave files behind in the temp folder.
+    assert.match(fs.readFileSync(path.join(starter, 'tools', 'browser.js'), 'utf8'), /--disable-component-update/);
+  });
+
+  test('core A05 a journey can have a second person act at the same time, with their own sign-in', async () => {
+    const { signedIn } = await import('../tools/client.js');
+    await t.user('second.browser@test.local');
+    const other = await signedIn(t.base, { email: 'second.browser@test.local', password: 'correct horse battery' });
+    assert.equal((await other.get('/api/auth/me')).body.user.email, 'second.browser@test.local');
+    const made = await other.post('/api/_t/things', { title: 'Made by the other one' });
+    assert.equal(made.status, 201, 'their session token goes with every change');
+    await assert.rejects(signedIn(t.base, { email: 'second.browser@test.local', password: 'not it' }), /could not sign in second\.browser@test\.local: 401/);
+    assert.match(fs.readFileSync(path.join(starter, 'tools', 'browser.js'), 'utf8'), /asOther: \(who\) => signedIn\(base/);
+  });
+
+  test('core M08 the app\'s own words for the Activity screen live in a file of the app\'s, and the sign-in page shows the app\'s name', async () => {
+    const words = await import('../public/js/activity-words.js');
+    assert.equal(words.ACTIONS['rule.refused'], 'Was refused by a rule');
+    assert.equal(typeof words.RULES, 'object');
+    const screen = fs.readFileSync(path.join(starter, 'public', 'js', 'activity.js'), 'utf8');
+    assert.match(screen, /from '\.\/activity-words\.js'/);
+    assert.ok(!/const WORDS = \{/.test(screen), 'activity.js holds no words of its own to edit');
+    const { appName } = loadConfig({});
+    assert.match(fs.readFileSync(path.join(starter, 'public', 'login.html'), 'utf8'), new RegExp(`<p class="brand">${appName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</p>`), 'a visitor at the sign-in page can see whose app it is');
   });
 
   // ---------------------------------------------------------------- M07 pages

@@ -5,7 +5,8 @@
 //
 //   node tools/look.js                        every role, every menu page, 390 and 1280 wide
 //   node tools/look.js --page /classes/new    also a page that no menu entry leads to (repeatable)
-//   node tools/look.js --out pictures         where the pictures go
+//   node tools/look.js --out pictures         where the pictures go: a new or empty folder, or one
+//                                             this tool made before (only its old pictures are removed)
 //
 // It reports, for each page: an error in a script, anything the security
 // policy blocked, a request that failed, a page that scrolls sideways, and
@@ -25,9 +26,8 @@
 // can name, not a layout that is merely ugly. Exit status: 0 nothing found,
 // 1 something found, 2 it could not run (no browser, or the app did not start).
 
-import fs from 'node:fs';
 import path from 'node:path';
-import { openApp, picturesFolder } from './browser.js';
+import { openApp, picturesFolder, picturesReady } from './browser.js';
 
 const WIDTHS = [390, 1280];
 
@@ -49,8 +49,7 @@ let app = null;
 try {
   app = await openApp();
   const { js, where } = app;
-  fs.rmSync(opts.dir, { recursive: true, force: true });
-  fs.mkdirSync(opts.dir, { recursive: true });
+  picturesReady(opts.dir);       // removes last time's pictures; refuses a folder of other files
 
   async function shoot(label, address, width) {
     app.takeNoted({ refusals: true });

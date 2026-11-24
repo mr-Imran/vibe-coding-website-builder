@@ -1,6 +1,6 @@
 # APP NAME
 
-REPLACE: three sentences. What this app is, who uses it, and what they get done with it.
+[[FILL IN: three sentences. What this app is, who uses it, and what they get done with it.]]
 
 ## Run it
 
@@ -22,15 +22,15 @@ Open that in a browser. Leave the window open while you use the app; close it
 
 ## Who can do what
 
-REPLACE: one line per role. What each kind of user can see and do, and how to
-get an account for each (who creates it, or the example data above). No passwords here.
+[[FILL IN: one line per role. What each kind of user can see and do, and how to
+get an account for each (who creates it, or the example data above). No passwords here.]]
 
 ## How it is built
 
 One Node.js program with its database in one file (`data/app.db`). No packages.
 
-REPLACE: one line per module, saying what it holds and which other modules it
-depends on. Then the main journey that crosses them, as a numbered list.
+[[FILL IN: one line per module, saying what it holds and which other modules it
+depends on. Then the main journey that crosses them, as a numbered list.]]
 
 ## The rules
 
@@ -45,13 +45,16 @@ node tools/look.js             # every screen as each role, in a browser without
 node tools/journey.js          # the main journey, clicked and typed in the same browser
 ```
 
-REPLACE: the result of the last run, with its date, and what the tests do not cover.
+The tests and both browser tools take spare ports. To keep them within a
+range, set `PORTS=3800-3899` first (Windows PowerShell: `$env:PORTS='3800-3899'`).
+
+[[FILL IN: the result of the last run, with its date, and what the tests do not cover.]]
 [RUBRIC.md](RUBRIC.md) says where each requirement is met and how to see it.
 
 ## Where it is online
 
-REPLACE: the address and the host, or "Not published yet."
+[[FILL IN: the address and the host, or "Not published yet."]]
 
 ## What it does not do
 
-REPLACE: the things someone might expect that are deliberately left out.
+[[FILL IN: the things someone might expect that are deliberately left out.]]

@@ -39,6 +39,14 @@ const EXTRA_ACCOUNTS = [
 // week"), so the example still looks alive when it is loaded months later.
 // Count what you promise: if the hand-over says "slots for the next 14
 // days", create fourteen days starting today.
+//
+// Make the app's records with the app's own functions where it has them
+// (import { book } from '../modules/bookings.js'), not with a bare INSERT:
+// a booking made by book() also takes the place it fills, writes its log
+// line and obeys the rules, so the example cannot show a state the app
+// itself would never reach. Those functions may use tx() themselves; a tx()
+// inside this one becomes part of it, and nothing is kept if any of it fails.
+// A bare INSERT is right for records the app has no function for.
 function addExampleData({ db, config, users }) {
   // Example:
   // const tomorrow = new Date(config.now().getTime() + 86400_000).toISOString();

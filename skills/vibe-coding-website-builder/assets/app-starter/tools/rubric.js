@@ -84,6 +84,14 @@ export function render(rows) {
   return lines.join('\n');
 }
 
+// The date on this computer's calendar, which is the date the person writing
+// the README sees. toISOString() would give the date in London, a day off in
+// the evening or early morning elsewhere.
+export function localDate(moment = new Date()) {
+  const two = (n) => String(n).padStart(2, '0');
+  return `${moment.getFullYear()}-${two(moment.getMonth() + 1)}-${two(moment.getDate())}`;
+}
+
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -97,7 +105,7 @@ if (isMain) {
   const table = render(rows);
   console.log(table);
   if (process.argv.includes('--write')) {
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = localDate();
     fs.writeFileSync(path.join(root, 'RUBRIC-RESULTS.md'),
       `# Test results by requirement\n\nGenerated ${stamp} by \`node tools/rubric.js --write\`.\n\n` +
       'A requirement is "met" when one of this app\'s own tests for it passes. "Core tests" check the parts that came with the starter.\n\n' +

@@ -14,7 +14,7 @@ skills/vibe-coding-website-builder/
   assets/         page-skeleton.html
                   app-starter/   the starting point for every app (see below)
   evals/          test cases: a prompt, input files and graders for each
-tests/            unit tests for site_check.py
+tests/            unit tests for site_check.py, and for the line endings
 docs/             the landing page, served by GitHub Pages; plain HTML and CSS
 assets/           the README demo (demo.json is its recorded output) and the social preview
 ```
@@ -48,6 +48,7 @@ node --test                 # every test must pass
 node tools/rubric.js        # the tests, counted against M01 to A08
 node tools/look.js          # after touching a page, a page script or app.css: every screen in a browser
 node tools/journey.js       # and the starter's own screens, clicked through
+# On a computer where programs must stay within some ports: PORTS=3800-3899 before any of these.
 ```
 
 - It needs Node.js 22.13 or newer and has no dependencies. Keep it that way:

@@ -1,4 +1,13 @@
-*.sh text eol=lf
-*.py text eol=lf
-# Windows batch files keep their Windows line endings on every system.
+# Every text file is stored and checked out with Unix line endings, on every
+# system and whatever Git's own settings are. Without this, a copy made on
+# Windows (a clone, a download, git archive) has Windows endings in every
+# file, and an edit that matches several lines at once fails on it.
+* text=auto eol=lf
+
+# Windows batch files keep their Windows line endings on every system:
+# stored exactly as they are, never converted.
 *.cmd -text
+
+*.png binary
+*.jpg binary
+*.ico binary

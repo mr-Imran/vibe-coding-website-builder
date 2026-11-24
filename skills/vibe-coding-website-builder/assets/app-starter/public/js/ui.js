@@ -7,11 +7,13 @@ import { api, el, fill } from './api.js';
 // A list that always shows one of four things: loading, nothing here (and
 // what to do next), the rows, or what went wrong with a way to try again.
 // It reads what the route returns from listQuery(): { rows, total, page, pages }.
+// A short list with no search or pages (four machines) can come from a route
+// that answers with a plain array; it still gets the four states.
 //
 //   const list = createList({
 //     url: '/api/classes',
 //     body: document.getElementById('rows'),          // the table's <tbody>, or a <ul>
-//     row: (record) => el('tr', {}, ...),             // one row, built with el()
+//     row: (record, data) => el('tr', {}, ...),       // one row, built with el(); data is the whole answer
 //     empty: (narrowed) => narrowed                   // text or elements; told whether the person
 //       ? 'Nothing matches. Try fewer words.'         // has changed the search or filters
 //       : 'No classes yet. Add the first one below.',
@@ -20,6 +22,10 @@ import { api, el, fill } from './api.js';
 //     loaded: (data) => { ... },                      // optional: show data.total or data.sums above the list
 //   });
 //   await list.load();        // again after anything changes: list.load()
+//
+// loaded(data) runs before the rows are built, so anything it keeps from
+// the answer (the server's "now", what this person may still book) is
+// already there for row(). A row can also read it from its second argument.
 //
 // The form's fields are the route's own words: a search box named q, a
 // <select name="sort"> whose values are the route's sortable names ("-day"
@@ -85,8 +91,10 @@ export function createList({ url, body, row, empty, filters = null, pager = null
     }
     if (mine !== latest) return;                       // a newer search was asked for meanwhile
     body.removeAttribute('aria-busy');
-    if (page > data.pages) { page = data.pages; await load(); return; }
-    if (data.rows.length) fill(body, data.rows.map(row));
+    if (Array.isArray(data)) data = { rows: data, total: data.length, page: 1, pages: 1 };
+    if (data.pages >= 1 && page > data.pages) { page = data.pages; await load(); return; }
+    if (loaded) loaded(data);
+    if (data.rows.length) fill(body, data.rows.map((record) => row(record, data)));
     else message(empty(narrowed));
     if (pager) {
       const turn = (to, label) => el('button', { type: 'button', class: 'button quiet', onclick: () => { page = to; load(); } }, label);
@@ -95,7 +103,6 @@ export function createList({ url, body, row, empty, filters = null, pager = null
         data.page > 1 ? turn(data.page - 1, 'Previous page') : null,
         data.page < data.pages ? turn(data.page + 1, 'Next page') : null);
     }
-    if (loaded) loaded(data);
   }
 
   if (filters) {

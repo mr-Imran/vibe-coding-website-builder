@@ -6,4 +6,4 @@ building, waiting for the owner to confirm).
 
 | # | Rule | Source | Enforced in | Test |
 |---|---|---|---|---|
-| 1 | REPLACE | REPLACE | REPLACE | REPLACE |
+| 1 | [[FILL IN]] | [[FILL IN]] | [[FILL IN]] | [[FILL IN]] |

@@ -17,7 +17,12 @@
 //   signIn(key), signOut(), go('/address'), back()
 //   fillIn('Label of the field', value)        text, a choice in a list (by its words or its value), true/false for a tick box
 //   press('Words on the button or link')       both take { near: 'text of the row, card or list item it is in' }
+//                                              and { nth: 2 } for the second of several that match (1 is the first):
+//                                              press('Book', { near: '3D printer 2', nth: 1 }) is the top row that says it
 //   answer('Words on the button')              a button in the question that is open
+//   asOther('member')                          a second person at the same time, in another "browser" without a
+//                                              screen: const other = await app.asOther('member2');
+//                                              await other.post('/api/bookings', { slot_id: 7 }); then reload and see
 //   see('text'), notSee('text')                waits up to five seconds; fails with what the page does show
 //   status()                                   what announce() last said
 //   count('css selector'), text('css selector'), js('expression'), width(390), shot('name')
@@ -25,15 +30,17 @@
 // Everything runs on a copy: a throw-away database filled by tools/seed.js
 // and the app started on a spare port. The real data folder is not touched.
 // It needs Chrome or Edge on this computer (CHROME_PATH=... if it is
-// somewhere unusual) and no packages.
+// somewhere unusual) and no packages. The copy and the browser take spare
+// ports; PORTS=3800-3899 keeps them within a range (tools/ports.js).
 
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../config.js';
+import { signedIn } from './client.js';
+import { freePort } from './ports.js';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,6 +50,28 @@ export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export function picturesFolder(kind) {
   const slug = loadConfig({}).appName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'app';
   return path.join(os.tmpdir(), `${slug}-${kind}`);
+}
+
+// Make a folder ready for a new set of pictures. The tools empty only a
+// folder they made themselves (it carries a marker file) or an empty one:
+// pointed by mistake at a folder of someone's own files, they stop instead
+// of deleting them. Only the pictures are removed, never anything else.
+// A tool's own default folder (picturesFolder) that holds nothing but
+// pictures is also its own: earlier versions did not leave the marker.
+const MARKER = '.pictures-from-the-app-tools';
+export function picturesReady(dir) {
+  if (fs.existsSync(dir)) {
+    const inside = fs.readdirSync(dir);
+    const ours = inside.includes(MARKER)
+      || (['look', 'journey'].some((kind) => path.resolve(picturesFolder(kind)) === path.resolve(dir)) && inside.every((name) => name.endsWith('.png')));
+    if (inside.length && !ours) {
+      throw new Error(`${dir} already holds files that these tools did not make, so it was left as it is. Choose a new folder (--out), or an empty one.`);
+    }
+    for (const name of inside) if (name.endsWith('.png')) fs.rmSync(path.join(dir, name), { force: true });
+  }
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, MARKER), 'Pictures of the screens, from tools/look.js or tools/journey.js. Safe to delete.\n');
+  return dir;
 }
 
 export function findBrowser() {
@@ -63,19 +92,13 @@ export function findBrowser() {
   return candidates.find((file) => file && fs.existsSync(file)) || null;
 }
 
-const freePort = () => new Promise((resolve, reject) => {
-  const probe = net.createServer();
-  probe.once('error', reject);
-  probe.listen(0, '127.0.0.1', () => { const { port } = probe.address(); probe.close(() => resolve(port)); });
-});
-
 function removeFolder(dir) {
   try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* a program may still hold a file; the system clears temp folders */ }
 }
 
 // The app on a spare port, with example data in a throw-away folder.
 async function startCopy(dataDir) {
-  const env = { ...process.env, DATA_DIR: dataDir, PORT: '0', HOST: '127.0.0.1' };
+  const env = { ...process.env, DATA_DIR: dataDir, PORT: String(await freePort()), HOST: '127.0.0.1' };
   for (const name of ['NODE_ENV', 'ADMIN_EMAIL', 'ADMIN_PASSWORD', 'APP_ORIGIN', 'SECURE_COOKIES', 'TRUST_PROXY']) delete env[name];
   const seeded = spawnSync(process.execPath, [path.join(root, 'tools', 'seed.js'), '--json'], { cwd: root, env, encoding: 'utf8' });
   if (seeded.status !== 0) throw new Error(`The example data did not load, so there is nobody to sign in as.\n${seeded.stderr || seeded.stdout}`);
@@ -100,7 +123,10 @@ async function startCopy(dataDir) {
 async function startBrowser(file) {
   const port = await freePort();
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'look-browser-'));
-  const child = spawn(file, ['--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
+  // No updates or downloads in the background: they leave files in the
+  // computer's temp folder that nothing removes.
+  const child = spawn(file, ['--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars', '--disable-component-update', '--disable-background-networking',
+    '--disable-default-apps', '--disable-sync', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
   let target = null;
   for (let i = 0; i < 80 && !target; i++) {
     await sleep(250);
@@ -134,25 +160,36 @@ async function startBrowser(file) {
 const IN_PAGE = `
   const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();
   const wordsOn = (c) => norm(c.innerText || c.value || c.getAttribute('aria-label') || c.getAttribute('title'));
-  function scopeFor(near) {
+  // The row, card or list item that says "near". When several say it, the
+  // smallest (the row, not the table around it); with nth, the nth of the
+  // innermost ones in page order, so { nth: 1 } is the top row.
+  function scopeFor(near, nth) {
     const top = document.querySelector('dialog[open]') || document.body;
     if (!near) return { scope: top };
     const boxes = [...top.querySelectorAll('tr, li, article, section, fieldset, form, .card')].filter((b) => norm(b.innerText).includes(near));
     if (!boxes.length) return { problem: 'nothing on the page (no row, card or list item) contains "' + near + '"' };
+    if (nth) {
+      const innermost = boxes.filter((b) => !boxes.some((o) => o !== b && b.contains(o)));
+      if (nth > innermost.length) return { problem: (innermost.length === 1 ? 'only one row, card or list item contains "' : 'only ' + innermost.length + ' rows, cards or list items contain "') + near + '", so there is no number ' + nth };
+      return { scope: innermost[nth - 1] };
+    }
     return { scope: boxes.reduce((a, b) => (norm(b.innerText).length < norm(a.innerText).length ? b : a)) };
   }
-  function press(text, near) {
-    const { scope, problem } = scopeFor(near);
+  function press(text, near, nth) {
+    const { scope, problem } = scopeFor(near, nth);
     if (problem) return problem;
     const controls = [...scope.querySelectorAll('button, a, [role="button"], summary, input[type="submit"], input[type="button"]')].filter((c) => c.getClientRects().length);
-    const hit = controls.find((c) => wordsOn(c) === text) || controls.find((c) => wordsOn(c).includes(text));
-    if (!hit) return 'no button or link says "' + text + '"' + (near ? ' near "' + near + '"' : '') + '. The ones there: ' + (controls.map(wordsOn).filter(Boolean).slice(0, 15).join(' | ') || 'none');
+    const exact = controls.filter((c) => wordsOn(c) === text);
+    const hits = exact.length ? exact : controls.filter((c) => wordsOn(c).includes(text));
+    // Without near, nth counts the buttons themselves: the second "Book" on the page.
+    const hit = !near && nth ? hits[nth - 1] : hits[0];
+    if (!near && nth && hits.length && !hit) return (hits.length === 1 ? 'only one button or link says "' : 'only ' + hits.length + ' buttons or links say "') + text + '", so there is no number ' + nth;
     if (hit.disabled) return 'the button "' + text + '" is switched off';
     hit.click();
     return '';
   }
-  function fillIn(label, value, near) {
-    const { scope, problem } = scopeFor(near);
+  function fillIn(label, value, near, nth) {
+    const { scope, problem } = scopeFor(near, nth);
     if (problem) return problem;
     const fields = [...scope.querySelectorAll('input, select, textarea')].filter((f) => f.type !== 'hidden' && f.getClientRects().length);
     const names = (f) => [...(f.labels ? [...f.labels].map((l) => norm(l.innerText)) : []), f.getAttribute('aria-label'), f.placeholder, f.name, f.id].filter(Boolean);
@@ -240,6 +277,11 @@ export async function openApp() {
     }
   }
   const where = () => js('location.pathname');
+  const countFrom1 = (nth) => {
+    if (nth === null || nth === undefined) return null;
+    if (!Number.isInteger(nth) || nth < 1) throw new Error(`nth: ${nth} is not a place in a list. 1 is the first, 2 the second.`);
+    return nth;
+  };
   const shown = () => js('(document.querySelector("dialog[open]") || document.body).innerText');
   const act = async (problem) => { if (problem) throw new Error(problem); await settle(); };
 
@@ -271,8 +313,13 @@ export async function openApp() {
       await settle();
       if (!(await where()).startsWith('/login')) throw new Error('the Sign out button did not lead to the sign-in page');
     },
-    press: async (text, { near = null } = {}) => act(await inPage(`press(${JSON.stringify(text)}, ${JSON.stringify(near)})`)),
-    fillIn: async (label, value, { near = null } = {}) => act(await inPage(`fillIn(${JSON.stringify(label)}, ${JSON.stringify(value)}, ${JSON.stringify(near)})`)),
+    press: async (text, { near = null, nth = null } = {}) => act(await inPage(`press(${JSON.stringify(text)}, ${JSON.stringify(near)}, ${JSON.stringify(countFrom1(nth))})`)),
+    fillIn: async (label, value, { near = null, nth = null } = {}) => act(await inPage(`fillIn(${JSON.stringify(label)}, ${JSON.stringify(value)}, ${JSON.stringify(near)}, ${JSON.stringify(countFrom1(nth))})`)),
+    // Another person, signed in at the same time in their own pretend browser
+    // (tools/client.js): get, post, put, patch and delete, with their own
+    // cookie and session token. For "two people go for the last place": the
+    // other one takes it, then this page tries.
+    asOther: (who) => signedIn(base, typeof who === 'string' ? app.account(who) : who),
     async answer(text) {
       if (!(await js('Boolean(document.querySelector("dialog[open]"))'))) throw new Error(`no question is open to answer "${text}"`);
       await app.press(text);
@@ -323,7 +370,7 @@ export async function openApp() {
       } catch (err) {
         stopped = true;
         let picture = null;
-        try { picture = await app.shot(path.join(picturesFolder('journey'), `failed-step-${steps.length + 1}.png`)); } catch { /* the page may be gone */ }
+        try { picture = await app.shot(path.join(picturesReady(picturesFolder('journey')), `failed-step-${steps.length + 1}.png`)); } catch { /* the page may be gone */ }
         steps.push({ title, state: 'FAILED', why: err.message, picture });
       }
     },
@@ -343,6 +390,9 @@ export async function openApp() {
 export async function withApp(journey) {
   let app;
   try {
+    // Pictures of steps that failed last time are gone before this run starts.
+    const old = picturesFolder('journey');
+    if (fs.existsSync(old)) picturesReady(old);
     app = await openApp();
   } catch (err) {
     console.error(`The journey was not run: ${err.message}`);

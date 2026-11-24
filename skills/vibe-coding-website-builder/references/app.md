@@ -117,13 +117,20 @@ project folder, including the files whose names start with a dot. Then:
 
 1. Run `node --test` in the project folder. All of the core's tests must pass
    before you add anything, so you know the starting point works on this
-   machine.
-2. Name the app: `appName` in `config.js`, the name in `package.json`, and
-   "My app" in every page under `public/` (the title, the description and
-   the link at the top left of each). No script holds the name. A core test
-   ("core M08 every page carries the app's name") fails while a page's
-   title lacks the name or "My app" is left anywhere in `public/`, so run
-   the tests after renaming and it tells you what you missed.
+   machine. The three `.cmd` files must keep their Windows line endings (a
+   core test checks): change them, if ever, with an editor, never with a
+   Unix tool such as `sed -i`, which rewrites every line. Every other file
+   has Unix line endings, and the starter's `.gitattributes` keeps it so.
+2. Name the app: `appName` in `config.js`, the name and the description in
+   `package.json`, and "My app" in every page under `public/` (the title,
+   the description, the link at the top left of each, and the line above
+   the sign-in form). No script holds the name. A core test ("core M08
+   every page carries the app's name") fails while a page's title lacks the
+   name or "My app" is left anywhere in `public/`, so run the tests after
+   renaming and it tells you what you missed. No test sees the look: give
+   `public/favicon.svg` the app's first letter and its colour (the starter's
+   is an "A" on blue), and set `--accent` at the top of `app.css` to the
+   same colour.
 3. Set the roles in `config.js`, most powerful first, and `defaultRole`. The
    first one manages people. Nothing else needs renaming: the People screen
    and its menu entry are written for `'top'`, which means "the first role,
@@ -159,12 +166,16 @@ looks for the menu entry by that address); only the words change.
 by itself: sign-ins and failed sign-ins, changes to accounts, a route called
 by a role that may not use it, a record refused by `guardRecord()`, and
 every refusal that names its rule (`conflict('...', { rule: 'max_open' })`).
-A refusal that names no rule is not logged. So if the app or its hand-over
-says that staff can see every refused attempt, every refusal in the app's
-modules must name a rule; say "refused attempts" only for what is really
-there. A module adds its own lines with `audit()` (a member approved, a
-booking cancelled by staff) and gives them words in `WORDS` at the top of
-`public/js/activity.js`.
+It does not list: a refusal that names no rule, input refused as invalid
+(422), a request from someone not signed in (401), or one with a wrong or
+missing session token. So never write "every refused attempt" in the
+hand-over or the README; say what is there: "staff see failed sign-ins,
+attempts to use a page or a record that is not theirs, and bookings refused
+by a rule, with who tried". A module adds its own lines with `audit()` (a
+member approved, a booking cancelled by staff). Give those lines words in
+`ACTIONS`, and the app's rules words in `RULES` (`max_upcoming: 'Already had
+2 upcoming bookings'`), in `public/js/activity-words.js`, which belongs to
+the app; `activity.js` itself stays as it came.
 
 What `core/` gives you, so that you do not write it again:
 
@@ -192,7 +203,7 @@ And in `public/js/`, for the pages:
 |---|---|
 | `api.js` | `api()` for every request; `el()` to build what is shown and `fill()` to replace what is inside a node; `showFieldErrors()`, `withBusy()`, `announce()` |
 | `shell.js` | `startPage()`: the session, the menu, sign out |
-| `ui.js` | `createList()`: a list with search, filters, order, pages and its four states; `ask()`: a yes-or-no question in the page |
+| `ui.js` | `createList()`: a list with search, filters, order, pages and its four states, also for a short list from a route that answers with a plain array; `ask()`: a yes-or-no question in the page |
 
 Use these helpers. Each one exists because the hand-written version of it is
 where apps built in a hurry go wrong: a list that puts the search text into
@@ -330,6 +341,36 @@ What that example does, and every route must do:
     return once(ctx, async () => cancel(booking));
   });
   ```
+- **A role, or a record?** `auth.requireRole('staff')` is for a route that
+  is about a kind of thing (the list of machines, adding a machine): a
+  member who calls it is refused with 403 and an `auth.denied` line naming
+  the address. When the route is about one record and the rule depends on
+  that record, even if today it is only a role ("a member may read their
+  own profile; only staff may change it"), use `auth.requireUser` and
+  `guardRecord(ctx, record, rules, 'write')` with the role inside the rule.
+  That gives the answer A03 asks for (404 for a record they may not see, 403
+  for one they may see but not change) and an `access.denied` line with the
+  record's number. Both are logged; pick by what the route addresses.
+- **A role, or a record?** `auth.requireRole('staff')` is for a route that
+  is about a kind of thing (the list of machines, adding a machine): a
+  member who calls it is refused with 403 and an `auth.denied` line naming
+  the address. When the route is about one record and the rule depends on
+  that record, even if today it is only a role ("a member may read their
+  own profile; only staff may change it"), use `auth.requireUser` and
+  `guardRecord(ctx, record, rules, 'write')` with the role inside the rule.
+  That gives the answer A03 asks for (404 for a record they may not see, 403
+  for one they may see but not change) and an `access.denied` line with the
+  record's number. Both are logged; pick by what the route addresses.
+- **A role, or a record?** `auth.requireRole('staff')` is for a route that
+  is about a kind of thing (the list of machines, adding a machine): a
+  member who calls it is refused with 403 and an `auth.denied` line naming
+  the address. When the route is about one record and the rule depends on
+  that record, even if today it is only a role ("a member may read their
+  own profile; only staff may change it"), use `auth.requireUser` and
+  `guardRecord(ctx, record, rules, 'write')` with the role inside the rule.
+  That gives the answer A03 asks for (404 for a record they may not see, 403
+  for one they may see but not change) and an `access.denied` line with the
+  record's number. Both are logged; pick by what the route addresses.
 - **Something that belongs to every account** (an approval, a profile, a
   credit balance) gets its own table keyed by the user's id. Do not edit
   `core/auth.js` to add columns. Create the row when the account is created:
@@ -353,12 +394,56 @@ What that example does, and every route must do:
   started?", "no bookings after 6 pm the day before") is about the clock
   where the business is: convert with `localParts()` and `zonedToUtc()` from
   `core/time.js` and `config.timeZone`.
+- **Things that repeat** ("a few slots per day on each machine", "a class
+  every Tuesday") are rows the app makes itself, not example data: real
+  slots cannot come from `tools/seed.js`. Keep a rolling window: on start,
+  on the first request of each new local day, and when a machine is added,
+  insert the slots for today and the next N days with
+  `INSERT OR IGNORE` against `UNIQUE (machine_id, starts_at)`, so running it
+  twice adds nothing. Store each slot's local day and wall-clock times
+  (`day`, `starts`, `ends` as the owner says them) beside the UTC moment,
+  so pages show them without converting. Two traps: in the evening, today
+  has no bookable slot left, so say "today and the 13 days after", not "14
+  days"; and slots already made keep the zone they were made in, so set
+  `TIME_ZONE` before the first start on a host (`app-publish.md`). The slot
+  times themselves are the owner's to give: until they do, they are an
+  assumption in `RULES.md` and a yellow note on the screen that shows them.
+- **Things that repeat** ("a few slots per day on each machine", "a class
+  every Tuesday") are rows the app makes itself, not example data: real
+  slots cannot come from `tools/seed.js`. Keep a rolling window: on start,
+  on the first request of each new local day, and when a machine is added,
+  insert the slots for today and the next N days with
+  `INSERT OR IGNORE` against `UNIQUE (machine_id, starts_at)`, so running it
+  twice adds nothing. Store each slot's local day and wall-clock times
+  (`day`, `starts`, `ends` as the owner says them) beside the UTC moment,
+  so pages show them without converting. Two traps: in the evening, today
+  has no bookable slot left, so say "today and the 13 days after", not "14
+  days"; and slots already made keep the zone they were made in, so set
+  `TIME_ZONE` before the first start on a host (`app-publish.md`). The slot
+  times themselves are the owner's to give: until they do, they are an
+  assumption in `RULES.md` and a yellow note on the screen that shows them.
+- **Things that repeat** ("a few slots per day on each machine", "a class
+  every Tuesday") are rows the app makes itself, not example data: real
+  slots cannot come from `tools/seed.js`. Keep a rolling window: on start,
+  on the first request of each new local day, and when a machine is added,
+  insert the slots for today and the next N days with
+  `INSERT OR IGNORE` against `UNIQUE (machine_id, starts_at)`, so running it
+  twice adds nothing. Store each slot's local day and wall-clock times
+  (`day`, `starts`, `ends` as the owner says them) beside the UTC moment,
+  so pages show them without converting. Two traps: in the evening, today
+  has no bookable slot left, so say "today and the 13 days after", not "14
+  days"; and slots already made keep the zone they were made in, so set
+  `TIME_ZONE` before the first start on a host (`app-publish.md`). The slot
+  times themselves are the owner's to give: until they do, they are an
+  assumption in `RULES.md` and a yellow note on the screen that shows them.
 - **There are two clocks, on purpose.** `config.now()` is the business's
   clock. Use it for every rule ("has it started?", "is the deadline past?")
   and for every time the app's own tables store (`created_at`, `booked_at`,
   `cancelled_at`): `const at = config.now().toISOString()`. A test can set
-  it (`startApp({ config: { now: () => new Date('2026-03-02T08:55:00Z') } })`)
-  and check a rule exactly at its edge, and what the rule compares against
+  it (`startApp({ config: { now: () => new Date('2026-03-02T08:55:00Z') } })`),
+  or move it while the app runs (`t.setClock('2026-03-02T08:59:59Z')`, then
+  `t.setClock('2026-03-02T09:00:00Z')`, and `t.setClock(null)` for the real
+  time again), and check a rule exactly at its edge, and what the rule compares against
   was stamped by the same clock. `now()` from `core/db.js` is the real
   clock. The core uses it for its own bookkeeping, which must not move when
   a test sets the time: sessions, the sign-in limit, and the `at` column of
@@ -377,6 +462,14 @@ What that example does, and every route must do:
   A figure that depends on a value of yours (the clock, the person asking)
   takes it in `params`, never pasted into the text:
   `upcoming: { count: 'starts_at > ?', params: [at] }`.
+  Sums follow the search and the filters, as they should for "N matching".
+  A figure that must not change when the person narrows the list (how many
+  of their 2 bookings they have used) comes from a route or a query of its
+  own, not from `sums`.
+  Sums follow the search and the filters, as they should for "N matching".
+  A figure that must not change when the person narrows the list (how many
+  of their 2 bookings they have used) comes from a route or a query of its
+  own, not from `sums`.
   The view needs a column called `id` (rows that tie are ordered by it), or
   pass `tiebreak: 'some_unique_column'`. For an order over several columns
   ("by day, then start time, then room"), name it:
@@ -433,6 +526,10 @@ an app's screens are still web pages. What differs:
   the key that makes a resend harmless, and gives one kind of error.
 - **Every screen has four states**: loading, nothing here yet (with what to
   do next), the data, and something went wrong (with a way to try again).
+  `createList()` gives a list all four, also a short one with no search or
+  pages (four machines): a route that answers with a plain array is enough.
+  `createList()` gives a list all four, also a short one with no search or
+  pages (four machines): a route that answers with a plain array is enough.
 - **Every form** shows the server's field messages next to the fields
   (`showFieldErrors`), keeps what the person typed, and cannot be sent twice
   (`withBusy`).
@@ -466,7 +563,13 @@ an app's screens are still web pages. What differs:
   states, waits a moment while someone types, ignores an answer that a
   newer search has overtaken, and steps back when the last row of the last
   page is removed. The People screen (`people.html`, `js/people.js`) is the
-  example to copy, including the figure above the list. The names of the
+  example to copy, including the figure above the list. `loaded(data)` runs
+  before the rows are built, and each row gets the whole answer as its
+  second argument (`row: (booking, data) => ...`), so a row can use what
+  came with it (the server's "now", what this person may still book). `loaded(data)` runs
+  before the rows are built, and each row gets the whole answer as its
+  second argument (`row: (booking, data) => ...`), so a row can use what
+  came with it (the server's "now", what this person may still book). The names of the
   form's fields also work in the page's address, so a figure on the home
   page can link to the list already narrowed: `/members?approved=0`.
 - **Every table works on a phone.** Give it `class="stack"`, make the first
@@ -478,15 +581,24 @@ an app's screens are still web pages. What differs:
 - Pages for some roles send others away with `startPage(['staff'])`. That
   is for comfort only; the route is what protects the data.
 - Yellow notes still apply to anything only the owner knows (their real
-  class times, their prices).
+  class times, their prices). The style is already in `app.css`:
+  `<mark class="needs-you">your slot times</mark>`. The page check counts
+  them and says "not yet" while one is left (section 10 says how to report
+  that).
 
 ## 7. The eight requirements and their tests
 
 A requirement is met when the app does it and one of the app's own tests
 proves it. Name each test with the requirement's id at the start; the report
-tool counts them. Put them in `tests/<module>.test.js`, using
-`tests/helpers.js` (`startApp`, `t.user(email, role)`), which runs the real
-app with a throw-away database and gives each pretend user their own cookies.
+tool counts them. Put them in `tests/<module>.test.js`, and the ones that
+are about the whole app (M01's journey, M03's and A03's loops, A05's race)
+in files of their own such as `tests/system.test.js`, `tests/access.test.js`
+and `tests/concurrency.test.js`. A file whose name does not end in
+`.test.js` (`tests/makerspace.js`, for shared set-up) is not run as tests.
+Use `tests/helpers.js`: `startApp()` runs the real app with a throw-away
+database, `t.user(email, role)` gives each pretend user their own cookies,
+`t.setClock()` moves the business clock, `tooWideForAPhone()` and
+`STAND_IN` are the checks for M07 and M08 below.
 
 ```js
 test('M04 a member with three open bookings cannot book a fourth', async () => { ... });
@@ -501,7 +613,7 @@ test('M04 a member with three open bookings cannot book a fourth', async () => {
 | **M05** Search, filter, sort, calculations | Lists use `listQuery`; totals and counts are calculated by the database over everything that matches, not just the page shown | Search finds the right rows, each filter narrows, each sort orders, pages add up, and a calculated figure matches a hand count |
 | **M06** Errors and edge cases | Bad input is refused field by field; a repeated action happens once; a failure part-way leaves nothing half done; the page says what went wrong | For the main form: empty, too long, wrong type, impossible values; the same request sent twice with one key makes one record; an action that fails in its second step leaves the first step undone |
 | **M07** Responsive UI and accessibility | The pages pass the page check, work at phone width, and can be used with a keyboard alone | What the core's M07 test does not already check (see below); and the page check's score in the report |
-| **M08** Live deployment and documentation | The app is online at an address the owner sent you, and `README.md` and `RUBRIC.md` are filled in | That `README.md` and `RUBRIC.md` exist and have their sections filled, that no stand-in text is left in them, and that `/api/health` answers. The live address is recorded in `RUBRIC.md` once the owner has published |
+| **M08** Live deployment and documentation | The app is online at an address the owner sent you, and `README.md` and `RUBRIC.md` are filled in | That `README.md`, `RUBRIC.md` and `RULES.md` exist and that no stand-in is left in them (`assert.doesNotMatch(text, STAND_IN)`: the starter marks each gap `[[FILL IN: ...]]`, which no sentence contains), and that `/api/health` answers. The live address is recorded in `RUBRIC.md` once the owner has published |
 
 The M08 test cannot prove the app is live; only the address can. The report
 tool shows M08 as "documented, not yet online" until `RUBRIC.md` has a line
@@ -534,7 +646,10 @@ Before the loop, create the records as another user and assert that each
 has the number 1 (`assert.equal(made.body.id, 1)`); after it, assert that
 each is unchanged and that `audit_log` has gained `access.denied` lines.
 Where record 1 cannot be someone else's (user 1 is usually the first staff
-account), prove that route's ownership rule in a test of its own. Some records
+account), make it so: in that test file, create a member before any staff
+(`t.user()` allows it), so that account 1, their profile and their booking 1
+all belong to one member, and the stranger is a second member. Where even
+that cannot be, prove that route's ownership rule in a test of its own. Some records
 are meant to be seen by everyone who is signed in (a class, a machine), and
 their read route rightly answers 200. Name those in a list at the top of
 the test, the way `open` is above, each with its reason in a comment, and
@@ -554,12 +669,13 @@ Do not delete a route to make the loop pass, and do not put a write route
 **What the app's M07 test adds.** The core's M07 test already reads every
 `.html` file in `public/`, including the app's, for the language, the
 viewport line, a title, one main heading, a `main` landmark, a label for
-every field, and no script or style written into the page. Do not copy it.
+every field, and no script or style written into the page; and `app.css`,
+with the app's additions, for any width wider than a 320-pixel phone
+(`tooWideForAPhone()` in `tests/helpers.js`). Do not copy it.
 The app's test checks what only the app knows: every page a menu entry or a
 link points to exists; every page loads its own script and that file exists;
 every table has a caption and either `class="stack"` or a reason not to;
-every button has a `type`; no fixed width in `app.css` is wider than a phone
-(320 pixels, the figure the page check uses too); and for the keyboard: no
+every button has a `type`; and for the keyboard: no
 element has a `tabindex` above 0, and in each form the button that sends it
 comes after its last field. These read files. They do not show that a page looks right, so say
 in the report which screens you looked at, at which widths, and how.
@@ -604,9 +720,12 @@ check what that person and the database end up with.
 - **Who makes it.** When the owner is with you, make their account, tell them
   the password once in your reply, and leave `data/` in place for them. When
   they are not, or the folder will be handed to someone else (a marker, a
-  colleague), hand it over with no `data/` folder, and tell them the two
-  steps: create an account (`add-account.cmd`, or the command), then start
-  the app. An app that arrives with accounts already in it arrives with
+  colleague), hand it over with no `data/` folder. Then the quickest way for them to
+  see the app working is the example data: `load-example-data.cmd`, then
+  `start-app.cmd`, then sign in with an account it listed. For real use
+  they start again without it: close the app, delete `data`, create their
+  own account (`add-account.cmd`, or the command), start the app. Give
+  both, in that order, in the hand-over. An app that arrives with accounts already in it arrives with
   passwords somebody else knows. The app helps with the order: while it
   has no accounts, the window it was started in says to create one, the
   sign-in page says the same, and creating an account on that page is
@@ -614,7 +733,10 @@ check what that person and the database end up with.
   Starting the app a second time prints "probably running already" and the
   address, not an error.
 - **Example data.** `tools/seed.js` is already written except for the app's
-  own records: fill in `addExampleData()`. The careful parts are done and
+  own records: fill in `addExampleData()`. Make records with the app's own
+  functions where it has them (`book()` from `modules/bookings.js`), not a
+  bare `INSERT`: a booking inserted by hand leaves its slot looking free.
+  A `tx()` inside those functions becomes part of the seed's own. The careful parts are done and
   tested: one account per role with passwords made up when it runs and shown
   once, a refusal to load twice, and a refusal on the live app unless asked.
   The owner runs it with `load-example-data.cmd` or `node tools/seed.js`.
@@ -633,14 +755,20 @@ check what that person and the database end up with.
   else. It loads the example data into a throw-away copy, starts the app on
   a spare port, signs in as each example account, opens every page in the
   menu at 390 and 1280 pixels, and saves a picture of each in a folder
-  outside the project (it prints where; `--out` chooses another). It reports script errors, anything the security
+  outside the project (it prints where; `--out` chooses another, which must
+  be new, empty, or one it made before: it never empties a folder of other
+  files). It reports script errors, anything the security
   policy blocked, failed requests, pages that scroll sideways and the word
   "null" printed where a value was missing; then it signs out and presses
   Back, which must not show the last person's page again. Add
   `--page /classes/new` for a page no menu entry leads to. Then open the
   pictures and look: the tool cannot tell whether a screen looks right, and
   it presses nothing. It exits with 2 when there is no browser; say so in
-  the report, and do not claim the screens were looked at.
+  the report, and do not claim the screens were looked at. Both browser
+  tools and the tests take spare ports; where programs must stay within a
+  range, set `PORTS=3800-3899` first (PowerShell:
+  `$env:PORTS='3800-3899'`). They clean up after themselves: the copy, the
+  browser's profile, and the pictures of steps that failed last time.
 - **Click through the journey**: `node tools/journey.js`. The tests prove
   the routes; this proves the buttons are wired to them. It drives the same
   browser, on the same kind of throw-away copy, but types into fields,
@@ -660,8 +788,12 @@ check what that person and the database end up with.
 
   `fillIn('Label', value)` finds a field by its label, `press('Words')` a
   button or link by its words, `answer('Words')` a button in an open
-  question, `see('text')` waits for text to appear; the rest is listed at
-  the top of `tools/browser.js`. Include at least one refusal the person
+  question, `see('text')` waits for text to appear. When several rows say
+  the same words, `{ near: '3D printer 2', nth: 1 }` is the top one. For
+  two people at once, `const other = await app.asOther('member2')` signs in
+  a second person without a screen; `await other.post(...)` takes the last
+  slot, then the page's own attempt shows what the loser is told. The rest
+  is listed at the top of `tools/browser.js`. Include at least one refusal the person
   would meet (the third booking, the form sent empty) and the sign-out. A
   failed step says why, shows what the page did say, and saves a picture.
   Report it as it was: "tools/journey.js went through N steps in a
@@ -721,13 +853,15 @@ without paths, and keep code paths (`modules/...`) out of the first half.
 It is in this folder: [full path of the project folder]
 
 **To see it**
-1. [Only if there are no accounts yet: create yours. Windows: double-click
-   add-account.cmd. Otherwise the command.]
+1. [When you hand over without data: load the made-up example data
+   (load-example-data.cmd, once); it lists an account for each role with
+   its password, shown once.]
 2. Start it: [double-click start-app.cmd / the command], and leave that
    window open.
 3. Open [address] and sign in with [which account; a password only if you
    made it just now and are saying it this once].
-[To try it with made-up data: load-example-data.cmd, once.]
+[For real use: close it, delete the data folder, create your own account
+with add-account.cmd, and start it again.]
 
 **What it does**
 [Three or four lines: each kind of user and what they can do. Then the main
@@ -739,10 +873,15 @@ for each requirement on their list, in their own wording, met or not, and
 the number of this app's tests for it. Leave out the "core tests" column
 and the rows for advanced requirements they did not ask for. M08 in its own
 words: documented, not yet online.]
-[N tests, all passing. They cover the cases listed in RUBRIC.md, not
-everything; nobody has tried to break in on purpose.]
-[Page check: N out of 100. A checklist of common faults, not a judgement of
-the design. Which screens you looked at yourself, at which widths, and how:
+[N tests, all passing: the app's own and the ones that came with the
+starter, as two numbers ("127: 48 for this app, 79 for the ready-made
+parts"), the same numbers as in the table. They cover the cases listed in
+RUBRIC.md, not everything; nobody has tried to break in on purpose.]
+[Page check: N out of 100, with its verdict and why. A checklist of common
+faults, not a judgement of the design. When the only thing between it and
+"ready" is a yellow note waiting for the owner, say so in those words: "97,
+'not yet', for one yellow note on the Machines page that waits for your slot
+times". Which screens you looked at yourself, at which widths, and how:
 "tools/look.js opened N screens as each role at 390 and 1280 pixels and
 found nothing; I looked at the pictures of ...; tools/journey.js went
 through N steps by clicking and typing", or that there was no browser and
@@ -769,7 +908,8 @@ steps. What they will need: the accounts named in app-publish.md.]
 
 Check every sentence of the report against what is in the folder before
 sending it: the number of tests, the number of days of example data, the
-names of the files to double-click. A report that promises fourteen days
+names of the files to double-click, and what each screen shows (the
+Activity screen lists what section 4 says, not "everything refused"). A report that promises fourteen days
 where thirteen were made is the app-sized version of a wrong phone number.
 
 If the owner is not there to ask, write the publishing steps from

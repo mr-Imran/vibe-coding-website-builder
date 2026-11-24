@@ -5,7 +5,7 @@
 //
 //   node tools/journey.js
 //
-// REPLACE the steps below with this app's own main journey for each kind of
+// Put this app's own main journey in place of the steps below, for each kind of
 // user (section 3 of the guide: "a member signs up, finds a class, books a
 // place; the teacher sees the list; the member cancels and the place opens up
 // again"). Keep one step per thing a person would notice, and end each step
@@ -75,6 +75,14 @@ await withApp(async (app) => {
     await app.fillIn('Refused attempts only', true);
     await app.see('A sign-in failed');
     await app.see(newcomer.email);
+  });
+
+  await app.step('Someone else, signed in at the same time, is refused the People list, and that shows too', async () => {
+    const other = await app.asOther(app.accounts[app.accounts.length - 1]);
+    const answer = await other.get('/api/users');
+    if (answer.status !== 403) throw new Error(`the People list answered ${answer.status} to someone whose role may not see it`);
+    await app.go('/activity');
+    await app.see('Tried something their role may not do');
   });
 
   await app.step('After signing out, the Back button does not bring the page back', async () => {

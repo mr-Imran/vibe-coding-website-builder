@@ -1,0 +1,11 @@
+# Text files keep Unix line endings on every computer, whatever Git's own
+# settings are.
+* text=auto eol=lf
+
+# The double-click files for Windows need Windows line endings: stored as
+# they are, never converted. Do not re-save them with a Unix tool (sed -i).
+*.cmd -text
+
+*.png binary
+*.jpg binary
+*.ico binary

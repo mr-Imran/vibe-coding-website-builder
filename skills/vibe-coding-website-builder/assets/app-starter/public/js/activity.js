@@ -2,31 +2,22 @@
 // what was refused. It reads /api/activity (core/activity.js).
 
 import { el } from './api.js';
+import { ACTIONS, RULES } from './activity-words.js';
 import { startPage } from './shell.js';
 import { createList } from './ui.js';
 
 await startPage('top');
 
-// What each line in the log means, in plain words. Add the app's own actions
-// here (the ones its modules write with audit()); a line without words is
-// shown by its action name.
-const WORDS = {
-  'auth.login': 'Signed in',
-  'auth.login_failed': 'A sign-in failed',
-  'auth.signup': 'Created their own account',
-  'auth.password_changed': 'Changed their own password',
-  'auth.denied': 'Tried something their role may not do',
-  'access.denied': 'Tried to reach a record that is not theirs',
-  'rule.refused': 'Was refused by a rule',
-  'user.created': 'Added an account',
-  'user.changed': 'Changed an account',
-  'user.password_set': 'Set a new password for someone',
-  'backup.downloaded': 'Downloaded a backup',
-  'seed.loaded': 'Example data was loaded',
-};
-
+// The words for each action and each rule are in js/activity-words.js, which
+// belongs to the app. This file stays as it came.
 const when = (iso) => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-const about = (line) => [line.entity ? `${line.entity} ${line.entity_id ?? ''}`.trim() : null, line.detail].filter(Boolean).join(': ');
+function about(line, rules = RULES) {
+  // A refusal by a rule is logged as "rule: METHOD /address". Show the rule
+  // in the owner's words when the app has given it some.
+  const refused = line.action === 'rule.refused' && /^([\w.-]+): ([A-Z]+) (\S+)$/.exec(line.detail || '');
+  if (refused) return rules[refused[1]] || `the rule "${refused[1]}" (${refused[2]} ${refused[3]})`;
+  return [line.entity ? `${line.entity} ${line.entity_id ?? ''}`.trim() : null, line.detail].filter(Boolean).join(': ');
+}
 
 const list = createList({
   url: '/api/activity',
@@ -36,7 +27,7 @@ const list = createList({
   row: (line) => el('tr', {},
     el('th', { scope: 'row' }, when(line.at)),
     el('td', { 'data-label': 'Who' }, line.user_name ? `${line.user_name} (${line.user_email})` : 'Nobody signed in'),
-    el('td', { 'data-label': 'What' }, WORDS[line.action] || line.action, line.refused ? el('span', { class: 'badge warn' }, 'refused') : null),
+    el('td', { 'data-label': 'What' }, ACTIONS[line.action] || line.action, line.refused ? el('span', { class: 'badge warn' }, 'refused') : null),
     el('td', { 'data-label': 'Details' }, about(line) || '-')),
   empty: (narrowed) => (narrowed ? 'Nothing matches. Try fewer words, or untick "Refused attempts only".' : 'Nothing has happened yet. Sign-ins, changes to accounts and refused attempts appear here.'),
   loaded: (data) => {

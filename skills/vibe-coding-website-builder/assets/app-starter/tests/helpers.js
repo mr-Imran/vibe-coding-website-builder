@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../config.js';
 import { buildApp } from '../server.js';
+import { createClient } from '../tools/client.js';
+import { onSparePort } from '../tools/ports.js';
 
 const quiet = { log() {}, error() {} };
 
@@ -15,13 +17,27 @@ export async function startApp({ setup = null, config = {}, dir = null, log = qu
   // Tests run on UTC unless they say otherwise, so they give the same answer
   // on every computer. Pass config: { timeZone: 'Europe/London' } to test a
   // rule about a time of day.
-  const built = await buildApp(loadConfig({}, { dataDir, port: 0, host: '127.0.0.1', timeZone: 'UTC', ...config }), { log });
+  //
+  // The clock can be moved while the app runs: t.setClock('2026-03-02T09:59:59Z')
+  // makes config.now() answer that moment, t.setClock(null) gives the real
+  // time back. A rule about a deadline is then tested one second before it and
+  // at it, in one app. config: { now } fixes the clock for the whole run instead.
+  let fixed = null;
+  const clock = config.now || (() => new Date());
+  const now = () => (fixed === null ? clock() : new Date(fixed));
+  const built = await buildApp(loadConfig({}, { dataDir, port: 0, host: '127.0.0.1', timeZone: 'UTC', ...config, now }), { log });
   if (setup) await setup(built);
-  const server = await built.app.listen(0, '127.0.0.1');
+  const server = await onSparePort((port) => built.app.listen(port, '127.0.0.1'));
   const base = `http://127.0.0.1:${server.address().port}`;
   return {
     ...built, base, dataDir, server,
     client: () => createClient(base),
+    setClock(moment) {
+      if (moment === null || moment === undefined) { fixed = null; return; }
+      const ms = new Date(moment).getTime();
+      if (Number.isNaN(ms)) throw new Error(`setClock: "${moment}" is not a moment. Write it like 2026-03-02T09:59:59Z.`);
+      fixed = ms;
+    },
     // Create an account and return a signed-in client for it.
     async user(email, role = null, password = 'correct horse battery') {
       const id = await built.auth.createUser({ email, name: email.split('@')[0], password, role: role || built.config.defaultRole });
@@ -38,76 +54,9 @@ export async function startApp({ setup = null, config = {}, dir = null, log = qu
   };
 }
 
-export function createClient(base) {
-  let cookie = '';
-  let csrf = '';
-  const client = {
-    id: null,
-    get cookie() { return cookie; },
-    get csrf() { return csrf; },
-    set csrf(value) { csrf = value; },
-    async request(method, url, body = undefined, headers = {}) {
-      const h = { ...headers };
-      if (cookie && h.Cookie === undefined) h.Cookie = cookie;
-      if (method !== 'GET' && csrf && h['X-CSRF-Token'] === undefined) h['X-CSRF-Token'] = csrf;
-      let payload;
-      if (body !== undefined) {
-        if (typeof body === 'string') payload = body;
-        else { payload = JSON.stringify(body); h['Content-Type'] ??= 'application/json'; }
-      }
-      const res = await fetch(base + url, { method, headers: h, body: payload });
-      for (const line of res.headers.getSetCookie()) cookie = line.split(';')[0];
-      const text = await res.text();
-      let json = null;
-      try { json = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
-      if (json && json.csrf) csrf = json.csrf;
-      return { status: res.status, body: json, text, headers: res.headers };
-    },
-    get: (url, headers) => client.request('GET', url, undefined, headers),
-    post: (url, body, headers) => client.request('POST', url, body, headers),
-    put: (url, body, headers) => client.request('PUT', url, body, headers),
-    patch: (url, body, headers) => client.request('PATCH', url, body, headers),
-    delete: (url, headers) => client.request('DELETE', url, undefined, headers),
-    // Open the live-update stream. next() waits for the next event.
-    async events() {
-      const controller = new AbortController();
-      const res = await fetch(`${base}/api/events`, { headers: { Cookie: cookie }, signal: controller.signal });
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      const queue = [];
-      const read = async () => {
-        for (;;) {
-          const cut = buffer.indexOf('\n\n');
-          if (cut >= 0) {
-            const frame = buffer.slice(0, cut);
-            buffer = buffer.slice(cut + 2);
-            const type = /^event: (.*)$/m.exec(frame);
-            const data = /^data: (.*)$/m.exec(frame);
-            if (type && data) return { type: type[1], data: JSON.parse(data[1]) };
-            continue;
-          }
-          const { done, value } = await reader.read();
-          if (done) return null;
-          buffer += decoder.decode(value, { stream: true });
-        }
-      };
-      return {
-        status: res.status,
-        async next(timeoutMs = 2000) {
-          if (queue.length) return queue.shift();
-          const timer = new Promise((resolve) => setTimeout(() => resolve('timeout'), timeoutMs));
-          const pending = read();
-          const got = await Promise.race([pending, timer]);
-          if (got === 'timeout') { pending.then((late) => { if (late) queue.push(late); }).catch(() => {}); return null; }
-          return got;
-        },
-        close() { controller.abort(); },
-      };
-    },
-  };
-  return client;
-}
+// The pretend browser lives in tools/client.js, so that tools/journey.js can
+// use it too.
+export { createClient } from '../tools/client.js';
 
 // Delete a throw-away folder. On Windows a file that another program still
 // has open cannot be deleted, and the error for that (EPERM) would replace
@@ -128,3 +77,48 @@ export async function runAll(jobs) {
 }
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// What the starter's README.md, RUBRIC.md and RULES.md say where the app's
+// own words go. The app's M08 test checks that none is left:
+//   assert.doesNotMatch(fs.readFileSync('README.md', 'utf8'), STAND_IN)
+// It cannot occur in ordinary writing, so "only replaced" in a sentence is safe.
+export const STAND_IN = /\[\[FILL IN[^\]]*\]\]/;
+
+// Widths in a style sheet that do not fit on a phone. The app's M07 test
+// asks for none wider than the narrowest phone (320 pixels), and the core
+// test runs this on public/app.css, so the app's own styles are checked too.
+// It reads width, min-width and flex-basis, in px, rem and em (16 pixels
+// each). Not counted: max-width (a ceiling, not a width), min(26rem, 100%)
+// (it gives way on a small screen), the larger ends of clamp(), and rules
+// inside @media (min-width: ...) for screens wider than a phone.
+const toPixels = (n, unit) => Number(n) * (unit.toLowerCase() === 'px' ? 1 : 16);
+export function tooWideForAPhone(css, phone = 320) {
+  const found = [];
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const open = [];                 // what each open { belongs to: a selector, or an @media line
+  let from = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '{') { open.push(text.slice(from, i).trim()); from = i + 1; continue; }
+    if (text[i] !== '}') continue;
+    const selector = open.pop();
+    const body = text.slice(from, i);
+    from = i + 1;
+    if (selector === undefined || selector.startsWith('@')) continue;
+    const wideScreensOnly = open.some((at) => {
+      const m = /^@media\b.*\bmin-width\s*:\s*(\d+(?:\.\d+)?)(px|rem|em)/i.exec(at);
+      return m && toPixels(m[1], m[2]) > phone;
+    });
+    if (wideScreensOnly) continue;
+    for (const declaration of body.split(';')) {
+      const d = /^\s*(width|min-width|flex-basis)\s*:\s*(.+?)\s*(!important)?\s*$/i.exec(declaration);
+      if (!d || /^min\(/i.test(d[2])) continue;
+      // clamp(smallest, preferred, largest): only the smallest has to fit.
+      const value = /^clamp\(/i.test(d[2]) ? d[2].slice(6).split(',')[0] : d[2];
+      for (const [, n, unit] of value.matchAll(/(\d+(?:\.\d+)?)(px|rem|em)\b/gi)) {
+        const px = toPixels(n, unit);
+        if (px > phone) found.push(`${selector} { ${d[1]}: ${d[2].trim()} } is ${Math.round(px)} pixels, wider than a ${phone}-pixel phone`);
+      }
+    }
+  }
+  return found;
+}
