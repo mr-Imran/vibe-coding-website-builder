@@ -97,7 +97,9 @@ part of the hand-over, as "What it does" and "What I assumed" (section 10).
   "Cancelling less than two hours before the class still uses a credit."
   "Only teachers may open the list of who is coming." Ask the owner for them.
   Where you cannot ask, write down the rules you assumed in `RULES.md`, mark
-  each as assumed, and list them under "I need these from you". Rules you
+  each as assumed, list them in the hand-over under "What I assumed", and
+  ask for a yes or no on them as one item under "I need these from you".
+  Rules you
   made up and did not disclose are the app-sized version of an invented
   review.
 - **Which advanced requirements apply.** Build the ones the person asked for.
@@ -124,7 +126,8 @@ project folder, including the files whose names start with a dot. Then:
 2. Name the app: `appName` in `config.js`, the name and the description in
    `package.json`, and "My app" in every page under `public/` (the title,
    the description, the link at the top left of each, and the line above
-   the sign-in form). No script holds the name. A core test ("core M08
+   the sign-in form), and the title of `README.md` (a `[[FILL IN]]` mark
+   until then). No script holds the name. A core test ("core M08
    every page carries the app's name") fails while a page's title lacks the
    name or "My app" is left anywhere in `public/`, so run the tests after
    renaming and it tells you what you missed. No test sees the look: give
@@ -320,7 +323,9 @@ What that example does, and every route must do:
   recognise a rule by the wording of its message.
 - **An edit sends back the version it started from**, and the route hands it
   to `updateVersioned()` as it arrived:
-  `const { version, ...rest } = await ctx.body();` then
+  `const { version, ...rest } = await ctx.body();` (safe: `ctx.body()`
+  answers 400 itself for a body that is `null`, a list or a bare value, so
+  what comes back is always an object) then
   `const input = check(rest, SCHEMA, { partial: true });` then
   `updateVersioned(db, 'classes', id, version, input, [...columns])`.
   A version that is missing or not a whole number is answered 422 by the
@@ -351,26 +356,6 @@ What that example does, and every route must do:
   That gives the answer A03 asks for (404 for a record they may not see, 403
   for one they may see but not change) and an `access.denied` line with the
   record's number. Both are logged; pick by what the route addresses.
-- **A role, or a record?** `auth.requireRole('staff')` is for a route that
-  is about a kind of thing (the list of machines, adding a machine): a
-  member who calls it is refused with 403 and an `auth.denied` line naming
-  the address. When the route is about one record and the rule depends on
-  that record, even if today it is only a role ("a member may read their
-  own profile; only staff may change it"), use `auth.requireUser` and
-  `guardRecord(ctx, record, rules, 'write')` with the role inside the rule.
-  That gives the answer A03 asks for (404 for a record they may not see, 403
-  for one they may see but not change) and an `access.denied` line with the
-  record's number. Both are logged; pick by what the route addresses.
-- **A role, or a record?** `auth.requireRole('staff')` is for a route that
-  is about a kind of thing (the list of machines, adding a machine): a
-  member who calls it is refused with 403 and an `auth.denied` line naming
-  the address. When the route is about one record and the rule depends on
-  that record, even if today it is only a role ("a member may read their
-  own profile; only staff may change it"), use `auth.requireUser` and
-  `guardRecord(ctx, record, rules, 'write')` with the role inside the rule.
-  That gives the answer A03 asks for (404 for a record they may not see, 403
-  for one they may see but not change) and an `access.denied` line with the
-  record's number. Both are logged; pick by what the route addresses.
 - **Something that belongs to every account** (an approval, a profile, a
   credit balance) gets its own table keyed by the user's id. Do not edit
   `core/auth.js` to add columns. Create the row when the account is created:
@@ -380,7 +365,11 @@ What that example does, and every route must do:
   `updateVersioned(db, 'profiles', user.id, version, input, columns, { key: 'user_id' })`,
   and the same last argument for `takeOne()` and `giveBack()` (a credit
   balance). It fires for every new account, however it was
-  made, in the same transaction. `auth.on('user.changed', (user, before) => ...)`
+  made, in the same transaction. Decide the row's default from the role,
+  and say in `RULES.md` what an account of each role starts with (a staff
+  account made with `add-account.cmd` needs no approval). The core tests
+  run the app's listeners with their own roles (`admin`, `member`), so a
+  listener must not fail for a role name the app does not have. `auth.on('user.changed', (user, before) => ...)`
   fires when a role changes or an account is switched off or on; use it when
   that should have a consequence (their future bookings are released). When
   nothing needs to happen, "no row means the default" is simpler still.
@@ -396,37 +385,12 @@ What that example does, and every route must do:
   `core/time.js` and `config.timeZone`.
 - **Things that repeat** ("a few slots per day on each machine", "a class
   every Tuesday") are rows the app makes itself, not example data: real
-  slots cannot come from `tools/seed.js`. Keep a rolling window: on start,
-  on the first request of each new local day, and when a machine is added,
-  insert the slots for today and the next N days with
-  `INSERT OR IGNORE` against `UNIQUE (machine_id, starts_at)`, so running it
-  twice adds nothing. Store each slot's local day and wall-clock times
-  (`day`, `starts`, `ends` as the owner says them) beside the UTC moment,
-  so pages show them without converting. Two traps: in the evening, today
-  has no bookable slot left, so say "today and the 13 days after", not "14
-  days"; and slots already made keep the zone they were made in, so set
-  `TIME_ZONE` before the first start on a host (`app-publish.md`). The slot
-  times themselves are the owner's to give: until they do, they are an
-  assumption in `RULES.md` and a yellow note on the screen that shows them.
-- **Things that repeat** ("a few slots per day on each machine", "a class
-  every Tuesday") are rows the app makes itself, not example data: real
-  slots cannot come from `tools/seed.js`. Keep a rolling window: on start,
-  on the first request of each new local day, and when a machine is added,
-  insert the slots for today and the next N days with
-  `INSERT OR IGNORE` against `UNIQUE (machine_id, starts_at)`, so running it
-  twice adds nothing. Store each slot's local day and wall-clock times
-  (`day`, `starts`, `ends` as the owner says them) beside the UTC moment,
-  so pages show them without converting. Two traps: in the evening, today
-  has no bookable slot left, so say "today and the 13 days after", not "14
-  days"; and slots already made keep the zone they were made in, so set
-  `TIME_ZONE` before the first start on a host (`app-publish.md`). The slot
-  times themselves are the owner's to give: until they do, they are an
-  assumption in `RULES.md` and a yellow note on the screen that shows them.
-- **Things that repeat** ("a few slots per day on each machine", "a class
-  every Tuesday") are rows the app makes itself, not example data: real
-  slots cannot come from `tools/seed.js`. Keep a rolling window: on start,
-  on the first request of each new local day, and when a machine is added,
-  insert the slots for today and the next N days with
+  slots cannot come from `tools/seed.js`. Keep a rolling window: before the
+  first request and the first request of each new local day, with
+  `app.everyNewDay((day) => keepSlotsAhead(db, day))` in the module's
+  `register` (it follows `config.now()`, so `t.setClock()` moves it too),
+  and when a machine is added, insert the slots for today and the next N
+  days with
   `INSERT OR IGNORE` against `UNIQUE (machine_id, starts_at)`, so running it
   twice adds nothing. Store each slot's local day and wall-clock times
   (`day`, `starts`, `ends` as the owner says them) beside the UTC moment,
@@ -462,10 +426,6 @@ What that example does, and every route must do:
   A figure that depends on a value of yours (the clock, the person asking)
   takes it in `params`, never pasted into the text:
   `upcoming: { count: 'starts_at > ?', params: [at] }`.
-  Sums follow the search and the filters, as they should for "N matching".
-  A figure that must not change when the person narrows the list (how many
-  of their 2 bookings they have used) comes from a route or a query of its
-  own, not from `sums`.
   Sums follow the search and the filters, as they should for "N matching".
   A figure that must not change when the person narrows the list (how many
   of their 2 bookings they have used) comes from a route or a query of its
@@ -528,8 +488,6 @@ an app's screens are still web pages. What differs:
   do next), the data, and something went wrong (with a way to try again).
   `createList()` gives a list all four, also a short one with no search or
   pages (four machines): a route that answers with a plain array is enough.
-  `createList()` gives a list all four, also a short one with no search or
-  pages (four machines): a route that answers with a plain array is enough.
 - **Every form** shows the server's field messages next to the fields
   (`showFieldErrors`), keeps what the person typed, and cannot be sent twice
   (`withBusy`).
@@ -566,9 +524,6 @@ an app's screens are still web pages. What differs:
   example to copy, including the figure above the list. `loaded(data)` runs
   before the rows are built, and each row gets the whole answer as its
   second argument (`row: (booking, data) => ...`), so a row can use what
-  came with it (the server's "now", what this person may still book). `loaded(data)` runs
-  before the rows are built, and each row gets the whole answer as its
-  second argument (`row: (booking, data) => ...`), so a row can use what
   came with it (the server's "now", what this person may still book). The names of the
   form's fields also work in the page's address, so a figure on the home
   page can link to the list already narrowed: `/members?approved=0`.
@@ -578,6 +533,12 @@ an app's screens are still web pages. What differs:
   with the column names beside the values. The People screen shows how. A
   table left to scroll sideways hides its right-hand columns, which is where
   the buttons usually are.
+- **"Today" on a page is the business's day**, not the visitor's
+  computer's: `businessDay()` from `js/api.js` gives
+  `{ today: '2026-03-02', time: '18:40', weekday: 1, timeZone }` as the
+  server saw it when the page loaded (it comes with `/api/auth/me` and
+  follows `config.now()`). A figure such as "bookings today" asks the
+  server, which uses the same clock.
 - Pages for some roles send others away with `startPage(['staff'])`. That
   is for comfort only; the route is what protects the data.
 - Yellow notes still apply to anything only the owner knows (their real
@@ -769,6 +730,10 @@ check what that person and the database end up with.
   range, set `PORTS=3800-3899` first (PowerShell:
   `$env:PORTS='3800-3899'`). They clean up after themselves: the copy, the
   browser's profile, and the pictures of steps that failed last time.
+  These, and the tests' throw-away databases, go in the computer's temp
+  folder. To keep all of it inside one folder, set `TEMP` and `TMP` to it
+  (`TMPDIR` on a Mac or Linux) before running; `look.js --out` moves only
+  the pictures.
 - **Click through the journey**: `node tools/journey.js`. The tests prove
   the routes; this proves the buttons are wired to them. It drives the same
   browser, on the same kind of throw-away copy, but types into fields,
@@ -787,8 +752,11 @@ check what that person and the database end up with.
   ```
 
   `fillIn('Label', value)` finds a field by its label, `press('Words')` a
-  button or link by its words, `answer('Words')` a button in an open
-  question, `see('text')` waits for text to appear. When several rows say
+  button or link by its words or its `aria-label` ("Approve Robin" on a
+  button that shows "Approve"), `answer('Words')` a button in an open
+  question, `see('text')` waits for text to appear. The choices inside a
+  drop-down list are not text on the page for `see`, `notSee` and `near`,
+  so a filter that lists every machine does not count as a row about one. When several rows say
   the same words, `{ near: '3D printer 2', nth: 1 }` is the top one. For
   two people at once, `const other = await app.asOther('member2')` signs in
   a second person without a screen; `await other.post(...)` takes the last
@@ -807,7 +775,8 @@ check what that person and the database end up with.
   whose script starts with `startPage()`. Keep both halves; `look.js`
   checks the result.
 - Run the page check on the project folder as for a site
-  (`scripts/site_check.py`). It reads `public/`. Stop the app when you are
+  (`python3 scripts/site_check.py`; on Windows the command is usually
+  `python`). It reads `public/`. Stop the app when you are
   done, and say so.
 
 ## 9. Documents the app must carry
@@ -865,7 +834,10 @@ with add-account.cmd, and start it again.]
 
 **What it does**
 [Three or four lines: each kind of user and what they can do. Then the main
-journey in one sentence.]
+journey in one sentence. If you mention the Activity screen, copy what it
+lists from section 4 ("failed sign-ins, attempts to use a page or a record
+that is not theirs, and bookings refused by a rule"); never "everything
+the app refused": invalid input is not logged.]
 
 **What was proven**
 [The requirements, from tools/rubric.js, rewritten for the person: one row

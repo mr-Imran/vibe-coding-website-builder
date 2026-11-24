@@ -7,6 +7,7 @@ import path from 'node:path';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { HttpError, badRequest, forbidden, notFound, unauthorized } from './errors.js';
 import { audit } from './policy.js';
+import { localParts } from './time.js';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -20,6 +21,8 @@ const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export function createApp({ db, config, publicDir, auth = null, log = console }) {
   const routes = [];
+  const daily = [];
+  let lastDay = null;
 
   function add(method, pattern, args) {
     const opts = typeof args[0] === 'object' && args[0] !== null ? args.shift() : {};
@@ -40,6 +43,13 @@ export function createApp({ db, config, publicDir, auth = null, log = console })
     patch: (p, ...a) => add('PATCH', p, a),
     delete: (p, ...a) => add('DELETE', p, a),
     handle,
+    // Work that has to happen once a day where the business is, such as
+    // making the next day's slots: app.everyNewDay((day) => keepSlotsAhead(db, day)).
+    // It runs before the first request the app answers, and again before the
+    // first request of each new local day (config.now() in config.timeZone),
+    // so a test that moves the clock with t.setClock() sees it too. Write it
+    // so that running it twice does no harm (INSERT OR IGNORE).
+    everyNewDay: (fn) => { daily.push(fn); },
     listen(port = config.port, host = config.host) {
       const server = http.createServer(handle);
       server.requestTimeout = 30_000;
@@ -65,6 +75,13 @@ export function createApp({ db, config, publicDir, auth = null, log = console })
       if (!pathname.startsWith('/api/')) return await serveStatic(req, res, pathname);
 
       res.setHeader('Cache-Control', 'no-store');
+      if (daily.length) {
+        const day = localParts(config.now ? config.now() : new Date(), config.timeZone || 'UTC').day;
+        if (day !== lastDay) {
+          for (const fn of daily) await fn(day);
+          lastDay = day;
+        }
+      }
       const match = findRoute(req.method, pathname);
       if (!match) throw notFound();
       ctx = makeContext(req, res, url, match.params, requestId);

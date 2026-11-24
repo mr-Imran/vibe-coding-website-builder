@@ -21,7 +21,7 @@ compatibility: >-
   references/checklist.md lists the same checks to do by reading the files.
   Apps need Node.js 22.13 or newer on the person's computer and nothing else.
 metadata:
-  version: "0.2.4"
+  version: "0.2.5"
 ---
 
 # Vibe Coding Website Builder
@@ -166,7 +166,7 @@ python3 scripts/site_check.py /path/to/project          # readable report
 python3 scripts/site_check.py /path/to/project --json   # for parsing
 ```
 
-If `python3` is not found, try `python`, then `py -3`. If there is no Python,
+If `python3` is not found, try `python` (the usual name on Windows), then `py -3`. If there is no Python,
 work through `references/checklist.md` by reading the files; do not ask the
 owner to install anything.
 

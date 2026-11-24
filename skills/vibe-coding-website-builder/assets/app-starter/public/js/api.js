@@ -5,6 +5,7 @@
 let csrf = null;
 let current = null;
 let roleNames = [];
+let businessTime = null;
 
 export class ApiError extends Error {
   constructor(status, body) {
@@ -26,12 +27,18 @@ export async function loadSession() {
     csrf = data.csrf;
     current = data.user;
     roleNames = data.roles || [];
+    businessTime = data.business || null;
     return current;
   } catch (err) {
     if (err.status === 401) { current = null; return null; }
     throw err;
   }
 }
+
+// The day and time where the business is, as the server saw it when the
+// page loaded: { today: '2026-03-02', time: '18:40', weekday: 1, timeZone, now }.
+// Use it for "today" on a page, not the visitor's own computer clock.
+export const businessDay = () => businessTime;
 
 // The app's roles as config.js lists them, most powerful first.
 export const allRoles = () => roleNames;

@@ -16,7 +16,9 @@
 // What a step can do:
 //   signIn(key), signOut(), go('/address'), back()
 //   fillIn('Label of the field', value)        text, a choice in a list (by its words or its value), true/false for a tick box
-//   press('Words on the button or link')       both take { near: 'text of the row, card or list item it is in' }
+//   press('Words on the button or link')       or its aria-label ("Approve Robin" for a button that shows "Approve")
+//                                              both take { near: 'text of the row, card or list item it is in' }
+//                                              (the choices of a drop-down list do not count as text there)
 //                                              and { nth: 2 } for the second of several that match (1 is the first):
 //                                              press('Book', { near: '3D printer 2', nth: 1 }) is the top row that says it
 //   answer('Words on the button')              a button in the question that is open
@@ -159,31 +161,49 @@ async function startBrowser(file) {
 // button by the words on it, a field by its label.
 const IN_PAGE = `
   const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();
-  const wordsOn = (c) => norm(c.innerText || c.value || c.getAttribute('aria-label') || c.getAttribute('title'));
+  // What a person reads in a part of the page. The choices inside a closed
+  // drop-down list are not on show, so they do not count: a filter whose list
+  // names every machine does not "say" any of them.
+  function said(box) {
+    let words = box.innerText || '';
+    for (const list of box.querySelectorAll('select, datalist')) {
+      const inside = list.innerText || '';
+      if (inside) words = words.split(inside).join(' ');
+    }
+    return norm(words);
+  }
+  // The names a button or link goes by: its words, and the label a screen
+  // reader hears (aria-label="Approve Robin"), which may say more.
+  const namesOf = (c) => [c.innerText, c.value, c.getAttribute('aria-label'), c.getAttribute('title')].map(norm).filter(Boolean);
+  const wordsOn = (c) => namesOf(c)[0] || '';
   // The row, card or list item that says "near". When several say it, the
   // smallest (the row, not the table around it); with nth, the nth of the
   // innermost ones in page order, so { nth: 1 } is the top row.
   function scopeFor(near, nth) {
     const top = document.querySelector('dialog[open]') || document.body;
     if (!near) return { scope: top };
-    const boxes = [...top.querySelectorAll('tr, li, article, section, fieldset, form, .card')].filter((b) => norm(b.innerText).includes(near));
+    const boxes = [...top.querySelectorAll('tr, li, article, section, fieldset, form, .card')].filter((b) => said(b).includes(near));
     if (!boxes.length) return { problem: 'nothing on the page (no row, card or list item) contains "' + near + '"' };
     if (nth) {
       const innermost = boxes.filter((b) => !boxes.some((o) => o !== b && b.contains(o)));
       if (nth > innermost.length) return { problem: (innermost.length === 1 ? 'only one row, card or list item contains "' : 'only ' + innermost.length + ' rows, cards or list items contain "') + near + '", so there is no number ' + nth };
       return { scope: innermost[nth - 1] };
     }
-    return { scope: boxes.reduce((a, b) => (norm(b.innerText).length < norm(a.innerText).length ? b : a)) };
+    return { scope: boxes.reduce((a, b) => (said(b).length < said(a).length ? b : a)) };
   }
   function press(text, near, nth) {
     const { scope, problem } = scopeFor(near, nth);
     if (problem) return problem;
     const controls = [...scope.querySelectorAll('button, a, [role="button"], summary, input[type="submit"], input[type="button"]')].filter((c) => c.getClientRects().length);
-    const exact = controls.filter((c) => wordsOn(c) === text);
-    const hits = exact.length ? exact : controls.filter((c) => wordsOn(c).includes(text));
+    const exact = controls.filter((c) => namesOf(c).includes(text));
+    const hits = exact.length ? exact : controls.filter((c) => namesOf(c).some((n) => n.includes(text)));
     // Without near, nth counts the buttons themselves: the second "Book" on the page.
     const hit = !near && nth ? hits[nth - 1] : hits[0];
     if (!near && nth && hits.length && !hit) return (hits.length === 1 ? 'only one button or link says "' : 'only ' + hits.length + ' buttons or links say "') + text + '", so there is no number ' + nth;
+    if (!hit) {
+      const there = [...new Set(controls.map(wordsOn).filter(Boolean))].slice(0, 15).join(' | ') || 'none';
+      return 'no button or link says "' + text + '"' + (near ? ' in the part that says "' + near + '"' : '') + '. The ones there: ' + there;
+    }
     if (hit.disabled) return 'the button "' + text + '" is switched off';
     hit.click();
     return '';
@@ -324,18 +344,20 @@ export async function openApp() {
       if (!(await js('Boolean(document.querySelector("dialog[open]"))'))) throw new Error(`no question is open to answer "${text}"`);
       await app.press(text);
     },
+    // The words a person can read: the choices hidden in a closed drop-down
+    // list do not count, so see('CNC router') waits for the list, not the filter.
     async see(text, { timeout = 5000 } = {}) {
       let last = '';
       for (let waited = 0; waited <= timeout; waited += 150) {
-        last = await js('document.body.innerText');
+        last = await inPage('said(document.body)');
         if (last.includes(text)) return;
         await sleep(150);
       }
-      throw new Error(`expected to see "${text}" on ${await where()}. The page shows: ${last.replace(/\s+/g, ' ').slice(0, 400)}`);
+      throw new Error(`expected to see "${text}" on ${await where()}. The page shows: ${last.slice(0, 400)}`);
     },
     async notSee(text) {
       await settle();
-      if ((await js('document.body.innerText')).includes(text)) throw new Error(`"${text}" is on ${await where()} and should not be`);
+      if ((await inPage('said(document.body)')).includes(text)) throw new Error(`"${text}" is on ${await where()} and should not be`);
     },
     status: () => js("(document.getElementById('status') || {}).textContent || ''"),
     count: (selector) => js(`document.querySelectorAll(${JSON.stringify(selector)}).length`),

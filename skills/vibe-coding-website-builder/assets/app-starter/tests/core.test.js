@@ -996,6 +996,51 @@ describe('core', () => {
     try { assert.equal(fixed.config.now().toISOString(), '2031-05-05T05:05:05.000Z', 'config: { now } still fixes it for the whole run'); } finally { await fixed.stop(); }
   });
 
+  test('core M04 work for each new day runs once per local day, by the business clock', async () => {
+    const days = [];
+    // 12:00 UTC is already the next day in Auckland.
+    const s = await startApp({ config: { timeZone: 'Pacific/Auckland' }, setup: (built) => built.app.everyNewDay((day) => { days.push(day); }) });
+    try {
+      s.setClock('2030-01-02T12:00:00Z');
+      const c = s.client();
+      await c.get('/api/health');
+      await c.get('/api/health');
+      assert.deepEqual(days, ['2030-01-03'], 'once, before the first request, for the local day');
+      s.setClock('2030-01-03T11:30:00Z');
+      await c.get('/api/auth/state');
+      assert.deepEqual(days, ['2030-01-03', '2030-01-04'], 'and again on the first request of the next local day');
+      const failing = await startApp({ setup: (built) => built.app.everyNewDay(() => { throw new Error('not yet'); }) });
+      try {
+        assert.equal((await failing.client().get('/api/health')).status, 500);
+        assert.equal((await failing.client().get('/api/health')).status, 500, 'work that failed is tried again on the next request');
+      } finally { await failing.stop(); }
+    } finally { await s.stop(); }
+  });
+
+  test('core M04 a page learns the business\'s own day and time when it signs in', async () => {
+    const s = await startApp({ config: { timeZone: 'Pacific/Auckland' } });
+    try {
+      s.setClock('2030-01-02T12:30:00Z');
+      const c = await s.user('day@example.com');
+      const { business } = (await c.get('/api/auth/me')).body;
+      assert.deepEqual(business, { now: '2030-01-02T12:30:00.000Z', today: '2030-01-03', time: '01:30', weekday: 4, timeZone: 'Pacific/Auckland' });
+      const api = fs.readFileSync(path.join(starter, 'public', 'js', 'api.js'), 'utf8');
+      assert.match(api, /export const businessDay = \(\) => businessTime/, 'pages read it with businessDay()');
+    } finally { await s.stop(); }
+  });
+
+  test('core M06 a request body is always an object, so a route can take it apart', async () => {
+    const s = await startApp();
+    try {
+      const c = await s.user('body@example.com');
+      for (const raw of ['null', '[]', '7', '"text"']) {
+        const res = await c.post('/api/auth/password', raw, { 'Content-Type': 'application/json' });
+        assert.equal(res.status, 400, raw);
+        assert.match(res.body.error.message, /as an object/, raw);
+      }
+    } finally { await s.stop(); }
+  });
+
   test('core M06 the tests and the browser tools can be kept within a range of ports', async () => {
     const { freePort, onSparePort, portRange } = await import('../tools/ports.js');
     assert.equal(portRange({}), null);
@@ -1045,6 +1090,11 @@ describe('core', () => {
       const text = fs.readFileSync(path.join(starter, name), 'utf8');
       assert.ok(!/\bREPLACE\b/.test(text), `${name} has no old REPLACE marks`);
     }
+    // The README's title is the app's name: a [[FILL IN]] mark until then
+    // (which the app's M08 test finds), never a stand-in that no test sees.
+    const title = fs.readFileSync(path.join(starter, 'README.md'), 'utf8').split('\n')[0];
+    assert.match(title, /^# \S/, 'the README starts with its title');
+    assert.doesNotMatch(title, /APP NAME|My app/i, 'the README title is the app\'s name or a [[FILL IN]] mark');
   });
 
   test('core M07 the picture tools never empty a folder of someone else\'s files', async () => {

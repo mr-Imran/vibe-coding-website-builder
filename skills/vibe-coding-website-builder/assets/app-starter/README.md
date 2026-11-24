@@ -1,4 +1,4 @@
-# APP NAME
+# [[FILL IN: the app's name]]
 
 [[FILL IN: three sentences. What this app is, who uses it, and what they get done with it.]]
 

@@ -17,6 +17,7 @@ import { HttpError, forbidden, invalid, notFound, tooMany, unauthorized } from '
 import { check, idParam } from './validate.js';
 import { audit } from './policy.js';
 import { listQuery } from './records.js';
+import { localParts } from './time.js';
 
 const scryptAsync = promisify(scrypt);
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
@@ -211,10 +212,14 @@ export function createAuth({ db, config }) {
       ctx.res.setHeader('Set-Cookie', cookie('', 0));
     });
 
-    // The page asks this on load: who am I, and what is my CSRF token?
+    // The page asks this on load: who am I, and what is my CSRF token? It
+    // also says what day and time it is where the business is (config.now()
+    // in config.timeZone), so a page can say "today" the way the rules mean it.
     app.get('/api/auth/me', (ctx) => {
       if (!ctx.user) throw unauthorized();
-      return { user: ctx.user, csrf: ctx.session.csrf, roles: config.roles };
+      const at = config.now ? config.now() : new Date();
+      const { day, time, weekday } = localParts(at, config.timeZone || 'UTC');
+      return { user: ctx.user, csrf: ctx.session.csrf, roles: config.roles, business: { now: at.toISOString(), today: day, time, weekday, timeZone: config.timeZone || 'UTC' } };
     });
 
     app.post('/api/auth/password', requireUser, async (ctx) => {
